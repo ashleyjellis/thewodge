@@ -1,9 +1,14 @@
 import { defineConfig } from 'vitest/config'
+import { fileURLToPath } from 'node:url'
 
-// The calc engine is pure TS — no framework plugins needed here. Keeping the test
-// config free of the TanStack Start plugin keeps the "maths is the product" ring
-// verifiable in isolation (spec §11, ring 1).
+// The forecast module is pure TS — no framework plugins needed. It does import the
+// `@/config` constants, so mirror the tsconfig path alias here.
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   test: {
     include: ['src/**/*.{test,spec}.ts'],
     environment: 'node',

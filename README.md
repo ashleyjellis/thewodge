@@ -1,97 +1,86 @@
 # The Wodge
 
-A wealth-clarity engine for affluent professionals who feel rich on paper but
-anxious in reality. It shows a household where they’re heading, when the market
-takes over from their contributions, and what they’re realistically free to do.
+A calm, whole-picture financial-trajectory tool for the UK. Enter your pension,
+investments and cash, and it carries them forward to 60 — showing the consequences
+of your own numbers, not a verdict, and never a comparison to anyone else.
 
-> **This is a modelling tool, not financial advice. We show you maths on your own
-> numbers — we don’t tell you what to do.** No recommendations, no product names,
-> no “you should”. Everything it teaches (SWR, ISA/pension mechanics, the £100k
-> trap, benchmarks) is publicly derivable and sourced.
+> The name lives in one place: `SITE_NAME` in `src/config.ts`.
+
+## Four principles (they govern every decision)
+
+1. **Consequences, not verdicts** — show what happens; never judge. No "on track" /
+   "behind" language anywhere.
+2. **Whole picture** — pension + stocks/shares + cash together, forecast forward.
+3. **Calm over anxiety** — no comparison to averages or cohorts, no live-refresh
+   numbers.
+4. **Transparency** — every assumption is visible and sourced (see `/methodology`).
 
 ## Stack
 
-TanStack Start (full-stack React on Vite) · TypeScript `strict` · Tailwind v4 with
-locked semantic tokens · hand-rolled SVG charts · Vitest · Drizzle + libSQL (Turso)
-for the server storage option.
+TanStack Start on Vite · TypeScript `strict` · Tailwind v4 (locked semantic tokens)
+· Vitest. The calculator is **stateless** — its inputs live in the URL search
+params, so guide/doorway pages can deep-link with pre-filled values that survive
+navigation to `/results`. No signup for v1.
 
 ## Run
 
 ```bash
 pnpm install
 pnpm dev        # http://localhost:3000
-pnpm test       # calc engine + store contract (Vitest)
+pnpm test       # forecast unit tests (Vitest)
 pnpm typecheck  # tsc --noEmit, strict
-pnpm build      # client + SSR
+pnpm build      # prerender + static SPA + sitemap/robots
 ```
 
-## Deploy (Vercel)
+## Routes
 
-v1 ships as a **static SPA** (TanStack Start SPA mode) plus one native serverless
-function for email — the reliable shape for static hosts, and enough because
-financials are local-first so no server is needed at runtime.
+| Route | What it is |
+|---|---|
+| `/` | Landing — the calculator is the hero, then supporting sections |
+| `/results` | Forecast from search params (age, pension, stocks, cash, monthly) |
+| `/how-it-works` | Three-step explainer |
+| `/methodology` | The maths — assumptions and their public sources, long form |
+| `/about` | Why it exists |
+| `/guides` · `/guides/$slug` | Doorway pages that deep-link into the calculator |
+| `/privacy` · `/terms` | Legal |
+| `/app` | Empty stub behind a placeholder auth boundary (snapshot ritual — later) |
 
-- `pnpm build` prerenders a hydratable shell to `dist/client/_shell.html` and the
-  post-build step copies it to `index.html`.
-- `vercel.json` sets `outputDirectory: dist/client`, runs `pnpm build`, serves
-  `/api/*` as functions, and falls back all other routes to `index.html` (client
-  routing) — this is the fix for the “404: NOT_FOUND” you get when a host serves
-  the SSR output folder as a plain static site.
-- `api/capture-email.mjs` keeps the email list server-side; financial data never
-  leaves the device.
+## The forecast (`src/lib/forecast.ts`)
 
-To restore full SSR (doorway-page SEO, §11), deploy the server build
-(`dist/server/server.js`) to a Node host instead of static hosting.
+Pure, typed, unit-tested. Invested assets (pension + stocks/shares) grow at a
+nominal `INVESTED_RATE` (7%); cash grows at a separate, lower `CASH_RATE` (2%) —
+never the equity rate. Monthly contributions are added to the invested pot and
+compounded monthly to `TARGET_AGE` (60). All three rates are constants in
+`src/config.ts` and stated on `/methodology`. Nominal, not inflation-adjusted.
 
-## Architecture — three rings, dependencies point inward only
+Results show: a whole-picture hero (today’s total → projected total), the
+growth-vs-contribution split (navy = what you put in, light blue = what the market
+adds), a four-row scenario table (stop / carry on / add £100 / add £500), and the
+visible workings.
 
-1. **Calc engine** — `src/lib/calc/*`. Pure TypeScript: zero framework, zero IO,
-   zero storage imports. This is the product. Fully unit-tested in isolation
-   against the source-conversation numbers (`pnpm test`).
-2. **Storage** — `src/lib/store/*` behind the `SnapshotStore` interface. The only
-   thing that touches persistence. Financial data never reaches the engine or UI
-   through any other path. See [`src/lib/store/README.md`](src/lib/store/README.md).
-3. **UI / routing** — `src/routes/*`, `src/components/*`, `src/state/*`.
-   Presentation only: reads the store, calls the engine, renders.
+## Global chrome
 
-Any import crossing these rings the wrong way (UI reaching into a DB client, calc
-importing storage) is a review-blocking bug.
+`SiteHeader` (sticky, collapses to a menu on mobile), `SiteFooter` (link columns,
+not-advice line, capture-only newsletter), and `MaxWidthContainer` (~1180px) wrap
+every route via the root layout. Desktop uses the horizontal space in multiple
+columns; the narrow single column only appears at mobile widths.
 
-## The five-screen arc
+## SEO & deploy (Vercel, static)
 
-`where am I → am I doing well → what’s the machine doing → what does the future
-look like → what am I free to do`. Every screen maps to a step; the value is the
-permission at the end, not the big number.
+- Indexable routes are **prerendered to static HTML** at build with real per-page
+  `<title>`/meta/OG (`src/lib/seo.ts`). `/results` and `/app` are `noindex` and
+  fall back to the SPA shell (client-rendered).
+- `scripts/seo.mjs` generates `sitemap.xml` + `robots.txt` from the prerendered
+  output; the default OG share image (`public/og-default.png`) is the growth-split
+  card.
+- `vercel.json` serves `dist/client` statically, `/api/*` as functions, and SPA-
+  falls-back everything else. `api/subscribe.mjs` captures newsletter emails.
+- Privacy-friendly analytics hook (Plausible-style) is wired via
+  `VITE_ANALYTICS_DOMAIN` — off unless set.
 
-- `/` — landing hook (age + total invested → benchmark + free-money read-out).
-- `/signup` — email capture wall (email server-side; financials never sent).
-- `/app/where-am-i` · `on-track` · `the-machine` · `the-future` · `what-am-i-free`.
-- `/app/track` — baseline / actuals / deliberate replan (the retention loop).
+## Design tokens
 
-## The calc engine (all real-terms, all pure)
-
-FI number · Coast FI (per pot/person/combined) · year-by-year projection ·
-contribution-vs-market-growth split · crossover year · stop-at-X · lifetime value
-of £1 · deployed-vs-generated · earliest-retirement · bridge check · plus the £100k
-personal-allowance trap and employer-match education helpers. Every function is
-surfaced with a “how we worked this out” drawer.
-
-> The spec’s worked example quotes Coast FI ≈ £432k for 24 years at 7%; that figure
-> is actually the 6% discount (`£1.75m / 1.06^24`). The formula is the source of
-> truth — the tests pin both cases (`src/lib/calc/fi.test.ts`).
-
-## Storage & privacy
-
-- **v1 is local-first**: household financials + snapshots live in the browser
-  (`localStorage`) behind `SnapshotStore`. Only the email goes server-side.
-- **Promotable to Turso** without touching the engine or UI — swap the store in
-  `src/lib/store/index.ts` for `TursoSnapshotStore` (Drizzle schema + encryption at
-  rest already written in `src/lib/server/*`). See the store README.
-- No financial data in URLs, query strings, logs, or third-party analytics.
-
-## Brand
-
-The brand guide is locked (see the project spec). Navy = “you”, accent (light blue)
-= “market/world” — never swapped. Semantic tokens only, no hardcoded hex in
-components. One `shadow-soft`. Calm over engagement: no verdicts, no urgency, no
-gamification, no reds/greens for ahead/behind.
+Page `#faf7f2` · cards `#ffffff` · primary/text/dark `#09153a` · accent/market
+`#cbdcec` · muted a soft grey-navy. Sentence case, generous whitespace, soft
+shadows only, no greens/oranges/reds. Semantic tokens only — no hardcoded hex in
+components.
