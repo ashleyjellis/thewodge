@@ -28,6 +28,7 @@ const COLUMNS: { title: string; links: { to: string; label: string; hash?: strin
     title: 'About',
     links: [
       { to: '/about', label: `Why ${SITE_NAME} exists` },
+      { to: '/security', label: 'Security' },
       { to: '/privacy', label: 'Privacy' },
       { to: '/terms', label: 'Terms' },
     ],

@@ -138,12 +138,16 @@ function Field({
   // strip commas so "120,000" pastes cleanly
   const handle = (raw: string) => onChange(raw.replace(/,/g, ''))
   return (
-    <label className={cn('block', className)}>
-      <span className="text-[13px] font-medium text-foreground">{label}</span>
-      {hint ? (
-        <span className="ml-1.5 text-[12px] text-muted-foreground">{hint}</span>
-      ) : null}
-      <span className="mt-2 flex items-center gap-1 rounded-2xl bg-muted px-4 py-3 ring-1 ring-transparent transition focus-within:bg-card focus-within:ring-foreground/25">
+    // full height + input pushed to the bottom, so wrapped labels never shift the
+    // box out of line with its neighbour in the same row
+    <label className={cn('flex h-full flex-col', className)}>
+      <span className="text-[13px] font-medium leading-snug text-foreground">
+        {label}
+        {hint ? (
+          <span className="ml-1.5 font-normal text-muted-foreground">{hint}</span>
+        ) : null}
+      </span>
+      <span className="mt-3 flex items-center gap-1 rounded-2xl bg-muted px-4 py-3 ring-1 ring-transparent transition focus-within:bg-card focus-within:ring-foreground/25">
         {prefix ? (
           <span className="text-[18px] font-semibold text-muted-foreground">
             {prefix}
