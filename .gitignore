@@ -27,3 +27,4 @@ wodge.db
 *.log
 .DS_Store
 coverage/
+.data/
