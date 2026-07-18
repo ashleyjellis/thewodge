@@ -12,6 +12,7 @@ import { useHousehold } from '@/state/useHousehold'
 import { useAccounts, type Account } from '@/state/useAccounts'
 import { groupAccounts } from '@/lib/groupAccounts'
 import { money } from '@/lib/format'
+import { postJson, patchJson } from '@/lib/apiClient'
 import {
   PersonCard,
   personFormToPayload,
@@ -38,28 +39,6 @@ const POT_LABELS: Record<'pension' | 'investments' | 'cash', string> = {
   pension: 'Pension',
   investments: 'Investments',
   cash: 'Cash',
-}
-
-async function postJson(url: string, body: unknown) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json()
-  if (!res.ok || !data.ok) throw new Error(data.error ?? 'request failed')
-  return data
-}
-
-async function patchJson(url: string, body: unknown) {
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json()
-  if (!res.ok || !data.ok) throw new Error(data.error ?? 'request failed')
-  return data
 }
 
 function AccountsPage() {

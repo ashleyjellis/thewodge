@@ -9,13 +9,15 @@ import {
   AccountOwnershipError,
   createAccount,
   getAccount,
+  InvalidBalanceError,
   isValidAccountOwner,
   listAccounts,
+  recordUpdate,
   rollupByPotCategory,
   setOpeningBalance,
   updateAccount,
 } from './accounts'
-import { listSnapshots } from './accountSnapshots'
+import { listSnapshots, periodGrowth } from './accountSnapshots'
 import type { Db } from './client'
 
 describe('accountTypeToPotCategory (fixed mapping, spec §0)', () => {
@@ -116,7 +118,12 @@ describe('accounts (against a real migrated database)', () => {
     expect(snaps).toHaveLength(1)
     expect(snaps[0]!.startBalance).toBe(145_000)
     expect(snaps[0]!.endBalance).toBe(145_000)
-    expect(snaps[0]!.moneyIn).toBeNull()
+    // known-zero (there's no prior period), not the "missing data" null —
+    // otherwise a real update later the same year would taint the annual
+    // rollup's contribution figure as "unknown" for a perfectly well-defined
+    // opening entry
+    expect(snaps[0]!.moneyIn).toBe(0)
+    expect(snaps[0]!.transferOut).toBe(0)
   })
 
   it('creating with no opening balance leaves current_balance null and no snapshot', async () => {
@@ -229,5 +236,69 @@ describe('accounts (against a real migrated database)', () => {
     const reloaded = await getAccount(db, a.id)
     expect(reloaded!.currentBalance).toBe(10_000)
     expect(await listSnapshots(db, a.id)).toHaveLength(1)
+  })
+
+  it('recordUpdate: first-ever update on an account with no balance treats it as the opening figure (start = end)', async () => {
+    const a = await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Nest',
+      accountType: 'pension',
+    })
+    const snap = await recordUpdate(db, a.id, {
+      endBalance: 5_000,
+      moneyIn: 0,
+      transferOut: 0,
+      isEstimated: false,
+    })
+    expect(snap.startBalance).toBe(5_000)
+    expect(snap.endBalance).toBe(5_000)
+    expect(periodGrowth(snap).growth).toBe(0) // no fabricated growth from a fake £0 start
+  })
+
+  it('recordUpdate: a later update starts from the previous snapshot end_balance', async () => {
+    const a = await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Scottish Widows',
+      accountType: 'pension',
+      openingBalance: 20_000,
+    })
+    const snap = await recordUpdate(db, a.id, {
+      endBalance: 21_200,
+      moneyIn: 1_000,
+      transferOut: 0,
+      isEstimated: true,
+    })
+    expect(snap.startBalance).toBe(20_000)
+    expect(snap.endBalance).toBe(21_200)
+    expect(snap.isEstimated).toBe(true)
+    expect(periodGrowth(snap).growth).toBe(200) // 21200-20000-1000+0
+
+    const reloaded = await getAccount(db, a.id)
+    expect(reloaded!.currentBalance).toBe(21_200)
+  })
+
+  it('recordUpdate rejects a non-finite end balance rather than silently treating it as zero', async () => {
+    const a = await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Legal & General',
+      accountType: 'pension',
+      openingBalance: 8_000,
+    })
+    await expect(
+      recordUpdate(db, a.id, {
+        endBalance: NaN,
+        moneyIn: 0,
+        transferOut: 0,
+        isEstimated: false,
+      }),
+    ).rejects.toBeInstanceOf(InvalidBalanceError)
+    // unchanged
+    expect((await getAccount(db, a.id))!.currentBalance).toBe(8_000)
   })
 })

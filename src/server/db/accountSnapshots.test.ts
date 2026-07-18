@@ -8,6 +8,7 @@ import {
   getLatestSnapshot,
   insertSnapshot,
   listSnapshots,
+  listSnapshotsForHousehold,
   monthsBetween,
   periodGrowth,
 } from './accountSnapshots'
@@ -163,5 +164,62 @@ describe('account_snapshots (append-only, against a real migrated database)', ()
     })
     expect(s.note).toBe('pulled £5k for the wedding')
     expect(periodGrowth(s).growth).toBeCloseTo(700, 6) // 77200-81500-0+5000
+  })
+})
+
+describe('listSnapshotsForHousehold', () => {
+  it('returns snapshots across every account in the household, none from another household', async () => {
+    const { db, cleanup } = await createMigratedTestDb()
+    try {
+      const h1 = await createHousehold(db)
+      const p1 = await createPerson(db, { householdId: h1.id, name: 'Sam', age: 36 })
+      const a1 = await createAccount(db, {
+        householdId: h1.id,
+        personId: p1.id,
+        owner: 'person_a',
+        provider: 'HL',
+        accountType: 'stocks_isa',
+        openingBalance: 10_000,
+      })
+      const a2 = await createAccount(db, {
+        householdId: h1.id,
+        personId: null,
+        owner: 'joint',
+        provider: 'Chase',
+        accountType: 'savings_account',
+        openingBalance: 5_000,
+      })
+
+      // a second, unrelated household — must never leak into the first's results
+      const h2 = await createHousehold(db)
+      const p2 = await createPerson(db, { householdId: h2.id, name: 'Alex', age: 40 })
+      await createAccount(db, {
+        householdId: h2.id,
+        personId: p2.id,
+        owner: 'person_a',
+        provider: 'Vanguard',
+        accountType: 'lisa',
+        openingBalance: 99_000,
+      })
+
+      await insertSnapshot(db, {
+        accountId: a1.id,
+        year: 2025,
+        month: 6,
+        startBalance: 10_000,
+        moneyIn: 300,
+        transferOut: 0,
+        endBalance: 10_400,
+      })
+
+      const rows = await listSnapshotsForHousehold(db, h1.id)
+      const accountIds = new Set(rows.map((r) => r.accountId))
+      // both h1 accounts' opening snapshots plus the one just inserted = 3
+      expect(rows.length).toBe(3)
+      expect(accountIds.has(a1.id)).toBe(true)
+      expect(accountIds.has(a2.id)).toBe(true)
+    } finally {
+      cleanup()
+    }
   })
 })

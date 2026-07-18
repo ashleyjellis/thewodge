@@ -75,6 +75,25 @@ export async function getLatestSnapshot(
   return rows[0] ?? null
 }
 
+/**
+ * Every snapshot across every account in a household, in one query — the Growth
+ * tab's history/diary and per-account rollups all read from this rather than
+ * fetching per-account (spec §3's "rolled-up" views span the whole household).
+ */
+export async function listSnapshotsForHousehold(
+  db: Db,
+  householdId: string,
+): Promise<AccountSnapshot[]> {
+  const rows = await db
+    .select({ snapshot: accountSnapshots })
+    .from(accountSnapshots)
+    .innerJoin(accounts, eq(accountSnapshots.accountId, accounts.id))
+    .where(eq(accounts.householdId, householdId))
+  return rows
+    .map((r) => r.snapshot)
+    .sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month - b.month))
+}
+
 export type PeriodGrowth = {
   /** null when money_in/transfer_out are missing — see periodGrowth() */
   growth: number | null

@@ -47,3 +47,13 @@ export function multiple(value: number, dp = 1): string {
 export function years(n: number): string {
   return `${n} ${n === 1 ? 'year' : 'years'}`
 }
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+/** "March 2025" — from a 1-indexed month, as stored on account_snapshots. */
+export function monthYear(year: number, month: number): string {
+  return `${MONTH_NAMES[month - 1] ?? month} ${year}`
+}

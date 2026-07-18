@@ -13,7 +13,11 @@ import {
   type AccountType,
   type PotCategory,
 } from './schema.js'
-import { insertSnapshot } from './accountSnapshots.js'
+import {
+  getLatestSnapshot,
+  insertSnapshot,
+  type AccountSnapshot,
+} from './accountSnapshots.js'
 
 export type Account = typeof accounts.$inferSelect
 
@@ -39,6 +43,8 @@ export function accountTypeToPotCategory(accountType: AccountType): PotCategory 
 
 export class AccountOwnershipError extends Error {}
 export class AccountAlreadyHasBalanceError extends Error {}
+export class InvalidBalanceError extends Error {}
+export class AccountNotFoundError extends Error {}
 
 async function writeOpeningBalanceSnapshot(db: Db, accountId: string, balance: number): Promise<void> {
   const opened = new Date()
@@ -48,8 +54,11 @@ async function writeOpeningBalanceSnapshot(db: Db, accountId: string, balance: n
     month: opened.getUTCMonth() + 1,
     startBalance: balance,
     endBalance: balance,
-    moneyIn: null,
-    transferOut: null,
+    // known-zero, not unknown: there's no prior period for a contribution to
+    // have happened in, so this isn't the "missing data" null means elsewhere —
+    // periodGrowth() should read this as a well-defined zero, not unavailable
+    moneyIn: 0,
+    transferOut: 0,
     isEstimated: false,
     note: 'Opening balance',
   })
@@ -117,13 +126,56 @@ export async function createAccount(db: Db, input: NewAccount): Promise<Account>
  */
 export async function setOpeningBalance(db: Db, accountId: string, balance: number): Promise<void> {
   const account = await getAccount(db, accountId)
-  if (!account) throw new Error('account not found')
+  if (!account) throw new AccountNotFoundError('account not found')
   if (account.currentBalance !== null) {
     throw new AccountAlreadyHasBalanceError(
       'This account already has a recorded balance — further updates belong in the Growth tab',
     )
   }
   await writeOpeningBalanceSnapshot(db, accountId, balance)
+}
+
+export type RecordUpdateInput = {
+  endBalance: number
+  moneyIn: number
+  transferOut: number
+  isEstimated: boolean
+  note?: string | null
+}
+
+/**
+ * The Growth tab's "update balances" save action (spec §3, steps 1-5) — one new
+ * append-only snapshot for this account. start_balance is never entered
+ * directly: it's the previous snapshot's end_balance, or (for an account with no
+ * snapshot yet — e.g. one added without an opening balance) this same
+ * end_balance, matching the opening-balance convention rather than fabricating a
+ * start point from nothing.
+ */
+export async function recordUpdate(
+  db: Db,
+  accountId: string,
+  input: RecordUpdateInput,
+): Promise<AccountSnapshot> {
+  if (!Number.isFinite(input.endBalance)) {
+    throw new InvalidBalanceError('a real end balance is required')
+  }
+  const account = await getAccount(db, accountId)
+  if (!account) throw new AccountNotFoundError('account not found')
+
+  const latest = await getLatestSnapshot(db, accountId)
+  const startBalance = latest ? latest.endBalance : input.endBalance
+  const now = new Date()
+  return insertSnapshot(db, {
+    accountId,
+    year: now.getUTCFullYear(),
+    month: now.getUTCMonth() + 1,
+    startBalance,
+    endBalance: input.endBalance,
+    moneyIn: input.moneyIn,
+    transferOut: input.transferOut,
+    isEstimated: input.isEstimated,
+    note: input.note ?? null,
+  })
 }
 
 export type AccountPatch = Partial<
