@@ -11,7 +11,7 @@
 import 'dotenv/config'
 import { createClient, type Client } from '@libsql/client'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
-import * as schema from './schema'
+import * as schema from './schema.js'
 
 export type Db = LibSQLDatabase<typeof schema>
 

@@ -6,7 +6,7 @@
  * pot_category is never accepted here — accountTypeToPotCategory() derives it,
  * same guarantee as the data-access layer itself.
  */
-import { getDb, type Db } from '../src/server/db/client'
+import { getDb, type Db } from '../src/server/db/client.js'
 import {
   AccountOwnershipError,
   createAccount,
@@ -15,8 +15,8 @@ import {
   updateAccount,
   type AccountPatch,
   type NewAccount,
-} from '../src/server/db/accounts'
-import { ACCOUNT_TYPES, type AccountType } from '../src/server/db/schema'
+} from '../src/server/db/accounts.js'
+import { ACCOUNT_TYPES, type AccountType } from '../src/server/db/schema.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -24,7 +24,7 @@ import {
   serverError,
   type ApiRequest,
   type ApiResponse,
-} from './_lib/http'
+} from './_lib/http.js'
 
 function isAccountType(v: unknown): v is AccountType {
   return typeof v === 'string' && (ACCOUNT_TYPES as readonly string[]).includes(v)
@@ -94,5 +94,9 @@ export async function handleAccounts(db: Db, req: ApiRequest, res: ApiResponse):
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await handleAccounts(getDb(), req, res)
+  try {
+    await handleAccounts(getDb(), req, res)
+  } catch (err) {
+    serverError(res, err)
+  }
 }

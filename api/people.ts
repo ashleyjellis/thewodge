@@ -2,14 +2,14 @@
  * POST  /api/people  → create a person (rejects a 3rd — see HouseholdFullError).
  * PATCH /api/people  → { id, ...patch } update a person.
  */
-import { getDb, type Db } from '../src/server/db/client'
+import { getDb, type Db } from '../src/server/db/client.js'
 import {
   createPerson,
   HouseholdFullError,
   updatePerson,
   type NewPerson,
   type PersonPatch,
-} from '../src/server/db/people'
+} from '../src/server/db/people.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -17,7 +17,7 @@ import {
   serverError,
   type ApiRequest,
   type ApiResponse,
-} from './_lib/http'
+} from './_lib/http.js'
 
 function numberOrNull(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
@@ -77,5 +77,9 @@ export async function handlePeople(db: Db, req: ApiRequest, res: ApiResponse): P
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await handlePeople(getDb(), req, res)
+  try {
+    await handlePeople(getDb(), req, res)
+  } catch (err) {
+    serverError(res, err)
+  }
 }

@@ -3,8 +3,8 @@
  * no clean way to constrain "count of rows per FK" at the DDL level).
  */
 import { eq } from 'drizzle-orm'
-import type { Db } from './client'
-import { people } from './schema'
+import type { Db } from './client.js'
+import { people } from './schema.js'
 
 export type Person = typeof people.$inferSelect
 

@@ -4,7 +4,7 @@
  * computed by summing these rows by pot_category — see rollupByPotCategory.
  */
 import { eq } from 'drizzle-orm'
-import type { Db } from './client'
+import type { Db } from './client.js'
 import {
   accounts,
   ACCOUNT_OWNERS,
@@ -12,8 +12,8 @@ import {
   type AccountOwner,
   type AccountType,
   type PotCategory,
-} from './schema'
-import { insertSnapshot } from './accountSnapshots'
+} from './schema.js'
+import { insertSnapshot } from './accountSnapshots.js'
 
 export type Account = typeof accounts.$inferSelect
 

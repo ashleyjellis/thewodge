@@ -6,9 +6,9 @@
  * (see src/server/db/households.ts). Exported as a testable core function plus a
  * thin default export, so tests can inject a db instance without hitting Turso.
  */
-import { getDb, type Db } from '../src/server/db/client'
-import { getOrCreateHousehold, updateHousehold, type HouseholdPatch } from '../src/server/db/households'
-import { listPeople } from '../src/server/db/people'
+import { getDb, type Db } from '../src/server/db/client.js'
+import { getOrCreateHousehold, updateHousehold, type HouseholdPatch } from '../src/server/db/households.js'
+import { listPeople } from '../src/server/db/people.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -16,7 +16,7 @@ import {
   serverError,
   type ApiRequest,
   type ApiResponse,
-} from './_lib/http'
+} from './_lib/http.js'
 
 export async function handleHousehold(
   db: Db,
@@ -55,5 +55,9 @@ export async function handleHousehold(
 }
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
-  await handleHousehold(getDb(), req, res)
+  try {
+    await handleHousehold(getDb(), req, res)
+  } catch (err) {
+    serverError(res, err)
+  }
 }

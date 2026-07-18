@@ -5,8 +5,8 @@
  * phase should use rather than assuming a row exists.
  */
 import { eq } from 'drizzle-orm'
-import type { Db } from './client'
-import { households } from './schema'
+import type { Db } from './client.js'
+import { households } from './schema.js'
 
 export type Household = typeof households.$inferSelect
 

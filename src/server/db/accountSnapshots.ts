@@ -5,8 +5,8 @@
  * pattern: a past period is never silently rewritten.
  */
 import { desc, eq } from 'drizzle-orm'
-import type { Db } from './client'
-import { accounts, accountSnapshots } from './schema'
+import type { Db } from './client.js'
+import { accounts, accountSnapshots } from './schema.js'
 
 export type AccountSnapshot = typeof accountSnapshots.$inferSelect
 
