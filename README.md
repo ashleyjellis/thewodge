@@ -25,6 +25,24 @@ pnpm typecheck  # tsc --noEmit, strict
 pnpm build      # client + SSR
 ```
 
+## Deploy (Vercel)
+
+v1 ships as a **static SPA** (TanStack Start SPA mode) plus one native serverless
+function for email — the reliable shape for static hosts, and enough because
+financials are local-first so no server is needed at runtime.
+
+- `pnpm build` prerenders a hydratable shell to `dist/client/_shell.html` and the
+  post-build step copies it to `index.html`.
+- `vercel.json` sets `outputDirectory: dist/client`, runs `pnpm build`, serves
+  `/api/*` as functions, and falls back all other routes to `index.html` (client
+  routing) — this is the fix for the “404: NOT_FOUND” you get when a host serves
+  the SSR output folder as a plain static site.
+- `api/capture-email.mjs` keeps the email list server-side; financial data never
+  leaves the device.
+
+To restore full SSR (doorway-page SEO, §11), deploy the server build
+(`dist/server/server.js`) to a Node host instead of static hosting.
+
 ## Architecture — three rings, dependencies point inward only
 
 1. **Calc engine** — `src/lib/calc/*`. Pure TypeScript: zero framework, zero IO,

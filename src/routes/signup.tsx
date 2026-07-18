@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
-import { captureEmail } from '@/lib/server/emailList'
 import { getStore } from '@/lib/store'
 import { money } from '@/lib/format'
 import { Card, Eyebrow, Muted, NotAdviceLine, Wordmark } from '@/components/brand'
@@ -27,7 +26,12 @@ function Signup() {
     setBusy(true)
     try {
       // email goes server-side (the list is the asset); financials never do.
-      await captureEmail({ data: email }).catch(() => undefined)
+      // non-blocking — a capture hiccup never stops someone seeing their picture.
+      await fetch('/api/capture-email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      }).catch(() => undefined)
       getStore().saveEmail(email.trim().toLowerCase())
       void navigate({ to: '/app/where-am-i' })
     } finally {

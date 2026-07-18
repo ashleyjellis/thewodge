@@ -10,5 +10,13 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
-  plugins: [tailwindcss(), tanstackStart(), viteReact()],
+  plugins: [
+    tailwindcss(),
+    // SPA mode: prerender a static shell (dist/client/index.html) and hydrate the
+    // app client-side. This makes the build a static site any host (Vercel) can
+    // serve without a running server — financials are local-first, so no server is
+    // needed at runtime for v1.
+    tanstackStart({ spa: { enabled: true } }),
+    viteReact(),
+  ],
 })
