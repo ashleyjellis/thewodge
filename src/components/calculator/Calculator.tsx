@@ -2,6 +2,11 @@
  * The calculator — age, pension, stocks/shares, cash, and a monthly contribution.
  * Stateless: on submit it hands the values up so the caller can write them to the
  * URL. Low friction — clean number fields, all optional-but-encouraged.
+ *
+ * `variant="full"` adds two further optional fields (monthly pension contribution,
+ * annual income) — used only on the /results "adjust your numbers" form, never on
+ * the landing hero, so the first thing anyone sees stays a fast, three-to-four-
+ * field instrument.
  */
 import { useState } from 'react'
 import type { CalculatorSearch } from '@/lib/search'
@@ -13,6 +18,8 @@ type FieldState = {
   stocks: string
   cash: string
   monthly: string
+  pensionMonthly: string
+  income: string
 }
 
 function toFieldState(v: CalculatorSearch): FieldState {
@@ -23,6 +30,8 @@ function toFieldState(v: CalculatorSearch): FieldState {
     stocks: s(v.stocks),
     cash: s(v.cash),
     monthly: s(v.monthly),
+    pensionMonthly: s(v.pensionMonthly),
+    income: s(v.income),
   }
 }
 
@@ -37,6 +46,8 @@ function toSearch(f: FieldState): CalculatorSearch {
     stocks: n(f.stocks),
     cash: n(f.cash),
     monthly: n(f.monthly),
+    pensionMonthly: n(f.pensionMonthly),
+    income: n(f.income),
   }
 }
 
@@ -44,15 +55,19 @@ export function Calculator({
   initial,
   onSubmit,
   submitLabel = 'See your trajectory',
+  variant = 'compact',
   className,
 }: {
   initial: CalculatorSearch
   onSubmit: (values: CalculatorSearch) => void
   submitLabel?: string
+  /** 'full' adds pension contribution + income — results page only */
+  variant?: 'compact' | 'full'
   className?: string
 }) {
   const [f, setF] = useState<FieldState>(() => toFieldState(initial))
   const set = (k: keyof FieldState) => (v: string) => setF((p) => ({ ...p, [k]: v }))
+  const full = variant === 'full'
 
   return (
     <form
@@ -70,14 +85,25 @@ export function Calculator({
           placeholder="38"
           inputMode="numeric"
         />
-        <Field
-          label="Monthly contribution"
-          hint="to your investments"
-          prefix="£"
-          value={f.monthly}
-          onChange={set('monthly')}
-          placeholder="300"
-        />
+        {full ? (
+          <Field
+            label="Your annual income"
+            hint="used to estimate a pension contribution if you leave that blank"
+            prefix="£"
+            value={f.income}
+            onChange={set('income')}
+            placeholder="65,000"
+          />
+        ) : (
+          <Field
+            label="Monthly contribution"
+            hint="to your investments"
+            prefix="£"
+            value={f.monthly}
+            onChange={set('monthly')}
+            placeholder="300"
+          />
+        )}
         <Field
           label="Pension value"
           prefix="£"
@@ -85,14 +111,46 @@ export function Calculator({
           onChange={set('pension')}
           placeholder="120,000"
         />
-        <Field
-          label="Stocks & shares"
-          hint="ISA / investments"
-          prefix="£"
-          value={f.stocks}
-          onChange={set('stocks')}
-          placeholder="60,000"
-        />
+        {full ? (
+          <Field
+            id="pension-contribution-field"
+            label="Monthly pension contribution"
+            hint="optional — makes your pension forecast accurate rather than assumed"
+            prefix="£"
+            value={f.pensionMonthly}
+            onChange={set('pensionMonthly')}
+            placeholder="500"
+          />
+        ) : (
+          <Field
+            label="Stocks & shares"
+            hint="ISA / investments"
+            prefix="£"
+            value={f.stocks}
+            onChange={set('stocks')}
+            placeholder="60,000"
+          />
+        )}
+        {full ? (
+          <>
+            <Field
+              label="Stocks & shares"
+              hint="ISA / investments"
+              prefix="£"
+              value={f.stocks}
+              onChange={set('stocks')}
+              placeholder="60,000"
+            />
+            <Field
+              label="Monthly contribution"
+              hint="to your investments"
+              prefix="£"
+              value={f.monthly}
+              onChange={set('monthly')}
+              placeholder="300"
+            />
+          </>
+        ) : null}
         <Field
           label="Cash savings"
           prefix="£"
@@ -125,6 +183,7 @@ function Field({
   placeholder,
   inputMode = 'decimal',
   className,
+  id,
 }: {
   label: string
   hint?: string
@@ -134,13 +193,14 @@ function Field({
   placeholder?: string
   inputMode?: 'numeric' | 'decimal'
   className?: string
+  id?: string
 }) {
   // strip commas so "120,000" pastes cleanly
   const handle = (raw: string) => onChange(raw.replace(/,/g, ''))
   return (
     // full height + input pushed to the bottom, so wrapped labels never shift the
     // box out of line with its neighbour in the same row
-    <label className={cn('flex h-full flex-col', className)}>
+    <label id={id} className={cn('flex h-full scroll-mt-24 flex-col', className)}>
       <span className="text-[13px] font-medium leading-snug text-foreground">
         {label}
         {hint ? (

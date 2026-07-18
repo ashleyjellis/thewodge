@@ -22,9 +22,17 @@ export const SITE_URL = (
 /** Nominal annual growth for invested assets (pension + stocks/shares). */
 export const INVESTED_RATE = 0.07
 /** Nominal annual growth for cash savings — deliberately lower than equities. */
-export const CASH_RATE = 0.02
+export const CASH_RATE = 0.045
 /** Age the forecast projects to. */
 export const TARGET_AGE = 60
+
+/**
+ * Default assumed pension contribution split, used ONLY when someone gives an
+ * income but no monthly pension contribution — a common employer-match shape, not
+ * a recommendation. Always surfaced explicitly wherever it's applied; never silent.
+ */
+export const DEFAULT_EMPLOYER_PENSION_PCT = 0.06
+export const DEFAULT_PERSONAL_PENSION_PCT = 0.06
 
 /** Layout: the site max width. Desktop uses the horizontal space; the narrow
  *  single column only appears at mobile widths. */

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_ASSUMPTIONS,
   findCrossoverYear,
   forecast,
   futureValueContributions,
   monthlyRate,
   projectTotal,
   projectYearly,
+  resolvePensionMonthly,
   type Assumptions,
   type ForecastInput,
 } from './forecast'
@@ -248,6 +250,144 @@ describe('findCrossoverYear', () => {
     const input: ForecastInput = { age: 40, pension: 100_000, stocks: 0, cash: 0, monthly: 300 }
     const r = forecast(input, A)
     expect(r.crossoverYear).toBe(findCrossoverYear(projectYearly(input, A)))
+  })
+})
+
+describe('cash grows at its own, lower rate (the plain correction)', () => {
+  it('defaults to 4.5% — never the equity rate', () => {
+    expect(DEFAULT_ASSUMPTIONS.cashRate).toBe(0.045)
+    expect(DEFAULT_ASSUMPTIONS.cashRate).not.toBe(DEFAULT_ASSUMPTIONS.investedRate)
+  })
+
+  it('produces a materially different figure than the invested rate would', () => {
+    const input: ForecastInput = { age: 40, pension: 0, stocks: 0, cash: 20_000, monthly: 0 }
+    const atCashRate = forecast(input, DEFAULT_ASSUMPTIONS).cash.future
+    const atInvestedRateForComparison = forecast(input, {
+      ...DEFAULT_ASSUMPTIONS,
+      cashRate: DEFAULT_ASSUMPTIONS.investedRate,
+    }).cash.future
+    expect(atCashRate).toBeCloseTo(48_234.28, 1) // 20k × 1.045^20
+    expect(atCashRate).toBeLessThan(atInvestedRateForComparison)
+  })
+})
+
+describe('resolvePensionMonthly (manual > assumed-from-income > none)', () => {
+  it('uses a manual entry when given', () => {
+    expect(resolvePensionMonthly({ age: 40, pension: 0, stocks: 0, cash: 0, monthly: 0, pensionMonthly: 400 })).toEqual({
+      monthly: 400,
+      basis: 'manual',
+    })
+  })
+
+  it('assumes a 6%/6% split of income when no manual entry is given', () => {
+    const r = resolvePensionMonthly({
+      age: 40,
+      pension: 0,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      income: 60_000,
+    })
+    expect(r.basis).toBe('assumed')
+    expect(r.monthly).toBeCloseTo(600, 6) // 60,000 × 12% / 12
+  })
+
+  it('lets a manual entry win even when income is also given', () => {
+    const r = resolvePensionMonthly({
+      age: 40,
+      pension: 0,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      pensionMonthly: 250,
+      income: 60_000,
+    })
+    expect(r).toEqual({ monthly: 250, basis: 'manual' })
+  })
+
+  it('resolves to none when neither is given', () => {
+    expect(resolvePensionMonthly({ age: 40, pension: 0, stocks: 0, cash: 0, monthly: 0 })).toEqual(
+      { monthly: 0, basis: 'none' },
+    )
+  })
+
+  it('ignores a zero or negative income and falls back to none', () => {
+    expect(
+      resolvePensionMonthly({ age: 40, pension: 0, stocks: 0, cash: 0, monthly: 0, income: 0 }),
+    ).toEqual({ monthly: 0, basis: 'none' })
+  })
+})
+
+describe('pension contributions flow through the whole forecast', () => {
+  it('a manual pension contribution grows the pension breakdown and is flagged manual', () => {
+    const input: ForecastInput = {
+      age: 40,
+      pension: 50_000,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      pensionMonthly: 400,
+    }
+    const r = forecast(input, A)
+    expect(r.pensionContributionBasis).toBe('manual')
+    expect(r.pensionMonthlyUsed).toBe(400)
+    expect(r.pension.contributions).toBe(400 * 240)
+    expect(r.pension.future).toBeCloseTo(396_498.77, 1)
+  })
+
+  it('an assumed (income-derived) contribution grows the pension and is flagged assumed', () => {
+    const input: ForecastInput = {
+      age: 40,
+      pension: 50_000,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      income: 60_000,
+    }
+    const r = forecast(input, A)
+    expect(r.pensionContributionBasis).toBe('assumed')
+    expect(r.pensionMonthlyUsed).toBeCloseTo(600, 6)
+    expect(r.pension.future).toBeCloseTo(498_006.05, 1)
+  })
+
+  it('is flagged none, with zero pension contribution, when neither is given', () => {
+    const input: ForecastInput = { age: 40, pension: 50_000, stocks: 0, cash: 0, monthly: 0 }
+    const r = forecast(input, A)
+    expect(r.pensionContributionBasis).toBe('none')
+    expect(r.pensionMonthlyUsed).toBe(0)
+    expect(r.pension.contributions).toBe(0)
+  })
+
+  it('flows into the year-by-year table exactly like investments already do', () => {
+    const input: ForecastInput = {
+      age: 40,
+      pension: 50_000,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      pensionMonthly: 400,
+    }
+    const yearly = projectYearly(input, A)
+    expect(yearly[1]!.pension.contribution).toBe(400 * 12)
+    expect(yearly[1]!.pension.startValue + yearly[1]!.pension.contribution + yearly[1]!.pension.growth).toBeCloseTo(
+      yearly[1]!.pension.endValue,
+      6,
+    )
+  })
+
+  it('flows into scenarios as a constant background contribution (scenarios still only vary investments)', () => {
+    const input: ForecastInput = {
+      age: 40,
+      pension: 50_000,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      pensionMonthly: 400,
+    }
+    const r = forecast(input, A)
+    const stop = r.scenarios.find((s) => s.key === 'stop')!
+    // "stop" only stops the investment contribution — pension's own £400/mo continues
+    expect(stop.total).toBeCloseTo(396_498.77, 1)
   })
 })
 

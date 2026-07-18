@@ -1,5 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { CASH_RATE, INVESTED_RATE, SITE_NAME, TARGET_AGE } from '@/config'
+import {
+  CASH_RATE,
+  DEFAULT_EMPLOYER_PENSION_PCT,
+  DEFAULT_PERSONAL_PENSION_PCT,
+  INVESTED_RATE,
+  SITE_NAME,
+  TARGET_AGE,
+} from '@/config'
 import { seo } from '@/lib/seo'
 import { percent } from '@/lib/format'
 import { MaxWidthContainer } from '@/components/site/Container'
@@ -80,10 +87,11 @@ function Methodology() {
 
             <h2>Cash grows at {percent(CASH_RATE)} a year — never the equity rate</h2>
             <p>
-              Cash is grown at a separate, lower rate. Over the long run cash
-              tracks short-term interest rates and typically returns far less than
-              equities — often barely keeping pace with inflation. Blending cash
-              into the equity rate would flatter the picture, so we don’t.
+              Cash is grown at a separate, lower rate. It’s set closer to what a
+              decent easy-access or cash ISA rate looks like in practice — still
+              well short of equities over the long run, but not as punishing as
+              treating it as static. Blending cash into the equity rate would
+              flatter the picture, so we don’t.
             </p>
             <ul>
               <li>
@@ -98,12 +106,26 @@ function Methodology() {
               </li>
             </ul>
 
+            <h2>Pension contributions — yours if you give them, assumed if you don’t</h2>
+            <p>
+              Pension only grows from the balance you enter unless you also give it
+              a monthly contribution. If you enter one directly, that figure is
+              used exactly. If you leave it blank but give your annual income
+              instead, we assume a typical {percent(DEFAULT_EMPLOYER_PENSION_PCT)}{' '}
+              employer + {percent(DEFAULT_PERSONAL_PENSION_PCT)} you split of that
+              income and say so plainly wherever it’s used — it’s a stand-in for a
+              number you haven’t told us, not a recommendation. Give neither, and
+              the tool says so clearly next to your result rather than quietly
+              assuming nothing forever.
+            </p>
+
             <h2>Compounding and contributions</h2>
             <p>
-              Balances compound monthly. Monthly contributions are added to the
-              invested pot each month and compounded to age {TARGET_AGE}. The annual
-              rates above are converted to their exact monthly equivalents, so “
-              {percent(INVESTED_RATE)} a year” means {percent(INVESTED_RATE)} a year.
+              Balances compound monthly. Monthly contributions to investments and to
+              pension are each added to their own pot every month and compounded to
+              age {TARGET_AGE}. The annual rates above are converted to their exact
+              monthly equivalents, so “{percent(INVESTED_RATE)} a year” means{' '}
+              {percent(INVESTED_RATE)} a year.
             </p>
 
             <h2>These are nominal figures</h2>

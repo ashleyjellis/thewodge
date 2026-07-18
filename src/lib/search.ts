@@ -11,6 +11,10 @@ export type CalculatorSearch = {
   stocks?: number
   cash?: number
   monthly?: number
+  /** manual monthly pension contribution — optional, results-page only */
+  pensionMonthly?: number
+  /** annual income (salary) — optional, results-page only */
+  income?: number
 }
 
 const NON_NEGATIVE = (v: unknown): number | undefined => {
@@ -30,6 +34,8 @@ export function validateCalculatorSearch(
     stocks: NON_NEGATIVE(search.stocks),
     cash: NON_NEGATIVE(search.cash),
     monthly: NON_NEGATIVE(search.monthly),
+    pensionMonthly: NON_NEGATIVE(search.pensionMonthly),
+    income: NON_NEGATIVE(search.income),
   }
 }
 
@@ -48,13 +54,23 @@ export function toForecastInput(s: CalculatorSearch): ForecastInput {
     stocks: s.stocks ?? 0,
     cash: s.cash ?? 0,
     monthly: s.monthly ?? 0,
+    pensionMonthly: s.pensionMonthly,
+    income: s.income,
   }
 }
 
 /** Drop empty values so the URL stays clean. */
 export function toSearch(s: CalculatorSearch): CalculatorSearch {
   const out: CalculatorSearch = {}
-  for (const k of ['age', 'pension', 'stocks', 'cash', 'monthly'] as const) {
+  for (const k of [
+    'age',
+    'pension',
+    'stocks',
+    'cash',
+    'monthly',
+    'pensionMonthly',
+    'income',
+  ] as const) {
     const v = s[k]
     if (v !== undefined && v !== null && !Number.isNaN(v)) out[k] = v
   }

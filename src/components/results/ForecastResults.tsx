@@ -12,15 +12,19 @@ import { StatRow } from '@/components/StatRow'
 import { StackedBar } from '@/components/StackedBar'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { NavLink } from '@/components/NavLink'
+import type { HookId } from '@/lib/hooks'
 import { YearlyTable } from './YearlyTable'
 import { StepUpCard } from './StepUpCard'
+import { SaveForecastCard } from './SaveForecastCard'
 
 export function ForecastResults({
   input,
   result,
+  onOpenHook,
 }: {
   input: ForecastInput
   result: ForecastResult
+  onOpenHook: (hookId: HookId) => void
 }) {
   const years = Math.max(0, result.targetAge - input.age)
   const marketLeads = result.marketAdds > result.whatYouPutIn
@@ -51,6 +55,28 @@ export function ForecastResults({
         </p>
       </div>
 
+      {/* hard-to-miss — pension isn't silently assumed at zero contribution */}
+      {result.pensionContributionBasis === 'none' && result.pension.today > 0 ? (
+        <div className="rounded-3xl border-2 border-accent bg-card p-6 sm:p-7">
+          <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            A note on your pension
+          </p>
+          <p className="mt-3 text-[15px] leading-relaxed text-foreground">
+            Your pension above is shown growing from{' '}
+            {money(result.pension.today)} today only — no monthly contribution is
+            included, because none has been entered. Add a{' '}
+            <a
+              href="#pension-contribution-field"
+              className="underline underline-offset-2"
+            >
+              monthly pension contribution
+            </a>{' '}
+            below, or your annual income for a typical estimate, and this becomes a
+            fuller picture.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* the pot split, baked into the metrics rather than a filter */}
         <div className="rounded-3xl bg-card p-7 shadow-soft">
@@ -73,7 +99,11 @@ export function ForecastResults({
               tone="you"
               label="Pension"
               value={money(result.pension.future)}
-              sub={`from ${money(result.pension.today)} today`}
+              sub={
+                result.pension.contributions > 0
+                  ? `from ${money(result.pension.today)} + contributions`
+                  : `from ${money(result.pension.today)} today`
+              }
             />
             <StatRow
               tone="market"
@@ -193,11 +223,27 @@ export function ForecastResults({
       <div className="rounded-3xl bg-card p-7 shadow-soft">
         <HowWeWorkedThisOut>
           <Working
-            formula={`Pension and stocks/shares grow at ${percent(INVESTED_RATE)} a year; cash grows at ${percent(CASH_RATE)} a year. Monthly contributions go to investments. Compounded monthly to age ${result.targetAge}.`}
+            formula={`Pension and stocks/shares grow at ${percent(INVESTED_RATE)} a year; cash grows at ${percent(CASH_RATE)} a year. Compounded monthly to age ${result.targetAge}.`}
             numbers={`pension ${money(result.pension.future)} + investments ${money(result.stocks.future)} + cash ${money(result.cash.future)} = ${money(result.projectedTotal)} over ${result.monthsToTarget} months`}
           />
+          {result.pensionContributionBasis === 'manual' ? (
+            <Working
+              formula="Your pension includes the monthly contribution you entered."
+              numbers={`${money(result.pensionMonthlyUsed)}/month × ${result.monthsToTarget} months = ${money(result.pension.contributions)} put in`}
+            />
+          ) : result.pensionContributionBasis === 'assumed' ? (
+            <Working
+              formula="No pension contribution was entered, so a typical 6% employer + 6% you split of your income is assumed — a stand-in figure, not a recommendation."
+              numbers={`12% of income ÷ 12 = ${money(result.pensionMonthlyUsed)}/month (assumed)`}
+            />
+          ) : (
+            <Working
+              formula="No pension contribution is included in this forecast."
+              numbers="none entered, and no income given to estimate one from"
+            />
+          )}
           <Working
-            formula="What you put in = starting balances + every monthly contribution. The market adds = projected total − what you put in."
+            formula="What you put in = starting balances + every monthly contribution, into whichever pot you're contributing to. The market adds = projected total − what you put in."
             numbers={`${money(result.whatYouPutIn)} put in · ${money(result.marketAdds)} from growth`}
           />
           <p>
@@ -218,6 +264,9 @@ export function ForecastResults({
       </p>
 
       <StepUpCard />
+
+      {/* the ambient, always-available closer — independent of any hook above */}
+      <SaveForecastCard onClick={() => onOpenHook('save-forecast')} />
     </div>
   )
 }

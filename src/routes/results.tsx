@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
@@ -9,9 +10,14 @@ import {
   validateCalculatorSearch,
   type CalculatorSearch,
 } from '@/lib/search'
+import type { HookId } from '@/lib/hooks'
+import { percent } from '@/lib/format'
 import { MaxWidthContainer } from '@/components/site/Container'
 import { Calculator } from '@/components/calculator/Calculator'
 import { ForecastResults } from '@/components/results/ForecastResults'
+import { AssumptionRow } from '@/components/results/AssumptionRow'
+import { PartnerCta } from '@/components/results/PartnerCta'
+import { HookModal } from '@/components/results/HookModal'
 import { NavLink } from '@/components/NavLink'
 
 const resultsSeo = seo({
@@ -35,14 +41,17 @@ function Results() {
   const navigate = useNavigate()
   const search = Route.useSearch()
   const ready = canForecast(search)
+  const [activeHook, setActiveHook] = useState<HookId | null>(null)
 
   const onSubmit = (values: CalculatorSearch) => {
     void navigate({ to: '/results', search: toSearch(values) })
   }
 
+  const result = ready ? forecast(toForecastInput(search)) : null
+
   return (
     <MaxWidthContainer className="py-12 lg:py-16">
-      {ready ? (
+      {ready && result ? (
         <>
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -63,7 +72,8 @@ function Results() {
 
           <ForecastResults
             input={toForecastInput(search)}
-            result={forecast(toForecastInput(search))}
+            result={result}
+            onOpenHook={setActiveHook}
           />
 
           <div className="mt-10 border-t border-border/60 pt-10">
@@ -74,12 +84,42 @@ function Results() {
               Change anything — your trajectory updates. Your inputs live in the
               page’s address, so you can bookmark or share this view.
             </p>
-            <div className="mt-5 max-w-xl">
+            <div className="mt-5 max-w-2xl">
               <Calculator
                 initial={search}
                 onSubmit={onSubmit}
                 submitLabel="Update"
+                variant="full"
               />
+            </div>
+
+            <div className="mt-6 max-w-2xl">
+              <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                What we’ve assumed
+              </p>
+              <div className="mt-3 space-y-2">
+                <AssumptionRow
+                  label="Investment growth"
+                  value={`${percent(result.assumptions.investedRate)} a year, assumed for everyone`}
+                  onClick={() => setActiveHook('invested-rate')}
+                />
+                <AssumptionRow
+                  label="Cash growth"
+                  value={`${percent(result.assumptions.cashRate)} a year, assumed for everyone`}
+                  onClick={() => setActiveHook('cash-rate')}
+                />
+                {result.pensionContributionBasis === 'assumed' ? (
+                  <AssumptionRow
+                    label="Pension contribution"
+                    value="6% employer + 6% you, assumed from your income"
+                    onClick={() => setActiveHook('employer-split')}
+                  />
+                ) : null}
+              </div>
+
+              <div className="mt-3">
+                <PartnerCta onClick={() => setActiveHook('partner')} />
+              </div>
             </div>
           </div>
         </>
@@ -93,10 +133,12 @@ function Results() {
             sent.
           </p>
           <div className="mt-8 text-left">
-            <Calculator initial={search} onSubmit={onSubmit} />
+            <Calculator initial={search} onSubmit={onSubmit} variant="full" />
           </div>
         </div>
       )}
+
+      <HookModal hookId={activeHook} onClose={() => setActiveHook(null)} />
     </MaxWidthContainer>
   )
 }

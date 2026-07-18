@@ -2,14 +2,24 @@
  * Forecast — the whole-picture projection (pure, typed, unit-tested).
  *
  * Pension and stocks/shares grow at a nominal equity rate; cash grows at a
- * separate, lower rate — never the equity rate. Monthly contributions go to
- * investments (stocks/shares) only — pension and cash grow from their starting
- * balance alone in this simple model. Compounded monthly to a target age.
+ * separate, lower rate — never the equity rate. Monthly contributions to
+ * investments come from what's entered directly. Pension contributions come from
+ * whichever of these is available, in order: a manually-entered monthly pension
+ * contribution; failing that, a typical employer + personal split assumed against
+ * an entered income; failing that, nothing — pension then grows from today's
+ * balance alone, which the UI must flag clearly rather than let pass silently.
+ * Compounded monthly to a target age.
  *
  * Nominal (not inflation-adjusted); the rates are stated openly on /methodology.
  * No comparison to anyone — this only shows the consequences of your own numbers.
  */
-import { CASH_RATE, INVESTED_RATE, TARGET_AGE } from '@/config'
+import {
+  CASH_RATE,
+  DEFAULT_EMPLOYER_PENSION_PCT,
+  DEFAULT_PERSONAL_PENSION_PCT,
+  INVESTED_RATE,
+  TARGET_AGE,
+} from '@/config'
 
 export type ForecastInput = {
   age: number
@@ -18,6 +28,11 @@ export type ForecastInput = {
   cash: number
   /** monthly contribution to invested assets (stocks/shares) */
   monthly: number
+  /** manually-entered monthly contribution to pension, if given */
+  pensionMonthly?: number
+  /** annual income (salary) — used only to estimate a pension contribution when
+   *  pensionMonthly isn't given; never used for advice or comparison */
+  income?: number
 }
 
 export type Assumptions = {
@@ -54,6 +69,16 @@ export type PotBreakdown = {
   growth: number
 }
 
+/**
+ * How the pension's monthly contribution was decided:
+ *  - 'manual'  — entered directly; always wins when present.
+ *  - 'assumed' — no manual entry, but an income was given, so a typical
+ *                employer + personal split is estimated (and must be shown as such).
+ *  - 'none'    — neither given; pension grows from today's balance only, and the
+ *                UI must surface this plainly, not bury it.
+ */
+export type PensionContributionBasis = 'manual' | 'assumed' | 'none'
+
 export type ForecastResult = {
   assumptions: Assumptions
   monthsToTarget: number
@@ -76,6 +101,9 @@ export type ForecastResult = {
   /** years from now the market first adds more in a year than you contribute; null if never within the horizon */
   crossoverYear: number | null
   yearly: YearPoint[]
+  /** the monthly pension contribution actually used in this forecast */
+  pensionMonthlyUsed: number
+  pensionContributionBasis: PensionContributionBasis
 }
 
 /** One pot's position at a single year mark. */
@@ -140,7 +168,29 @@ function breakdownFor(
   return { today, future, contributions, growth: future - today - contributions }
 }
 
-/** Projected total at the target age for a given monthly contribution. */
+/**
+ * Decide the pension's monthly contribution: a manual entry always wins; failing
+ * that, an entered income implies a typical employer + personal split; failing
+ * that, there is none, and the caller must surface that plainly.
+ */
+export function resolvePensionMonthly(input: ForecastInput): {
+  monthly: number
+  basis: PensionContributionBasis
+} {
+  const manual = clampMoney(input.pensionMonthly ?? 0)
+  if (manual > 0) return { monthly: manual, basis: 'manual' }
+
+  const income = clampMoney(input.income ?? 0)
+  if (income > 0) {
+    const monthly =
+      (income * (DEFAULT_EMPLOYER_PENSION_PCT + DEFAULT_PERSONAL_PENSION_PCT)) / 12
+    return { monthly, basis: 'assumed' }
+  }
+
+  return { monthly: 0, basis: 'none' }
+}
+
+/** Projected total at the target age for a given monthly investment contribution. */
 export function projectTotal(
   input: ForecastInput,
   monthly: number,
@@ -152,12 +202,16 @@ export function projectTotal(
   const months = monthsToTarget(input.age, a.targetAge)
   const mInv = monthlyRate(a.investedRate)
   const mCash = monthlyRate(a.cashRate)
+  const { monthly: pensionMonthly } = resolvePensionMonthly(input)
 
-  const invested =
-    futureValueLump(pension + stocks, mInv, months) +
+  const pensionFuture =
+    futureValueLump(pension, mInv, months) +
+    futureValueContributions(pensionMonthly, mInv, months)
+  const stocksFuture =
+    futureValueLump(stocks, mInv, months) +
     futureValueContributions(clampMoney(monthly), mInv, months)
-  const cashGrown = futureValueLump(cash, mCash, months)
-  return invested + cashGrown
+  const cashFuture = futureValueLump(cash, mCash, months)
+  return pensionFuture + stocksFuture + cashFuture
 }
 
 const SCENARIO_META: { key: ScenarioKey; label: string; delta: number | 'stop' }[] = [
@@ -169,9 +223,10 @@ const SCENARIO_META: { key: ScenarioKey; label: string; delta: number | 'stop' }
 
 /**
  * Year-by-year projection, split by pot. Whole years from today (year 0) to the
- * target age. Pension and cash grow from their starting balance only; the monthly
- * contribution applies to stocks/investments. Growth for a year is derived the same
- * way throughout this codebase: endValue − startValue − contribution.
+ * target age. Cash grows from its starting balance only. Pension and stocks each
+ * grow from their starting balance plus their own resolved monthly contribution
+ * (see resolvePensionMonthly for how pension's is decided). Growth for a year is
+ * derived the same way throughout this codebase: endValue − startValue − contribution.
  */
 export function projectYearly(
   input: ForecastInput,
@@ -180,7 +235,8 @@ export function projectYearly(
   const pensionToday = clampMoney(input.pension)
   const stocksToday = clampMoney(input.stocks)
   const cashToday = clampMoney(input.cash)
-  const monthly = clampMoney(input.monthly)
+  const stocksMonthly = clampMoney(input.monthly)
+  const { monthly: pensionMonthly } = resolvePensionMonthly(input)
   const years = Math.max(0, Math.round(a.targetAge - input.age))
   const mInv = monthlyRate(a.investedRate)
   const mCash = monthlyRate(a.cashRate)
@@ -209,14 +265,17 @@ export function projectYearly(
 
   for (let y = 1; y <= years; y++) {
     const monthsElapsed = y * 12
-    const pensionEnd = futureValueLump(pensionToday, mInv, monthsElapsed)
+    const pensionEnd =
+      futureValueLump(pensionToday, mInv, monthsElapsed) +
+      futureValueContributions(pensionMonthly, mInv, monthsElapsed)
     const stocksEnd =
       futureValueLump(stocksToday, mInv, monthsElapsed) +
-      futureValueContributions(monthly, mInv, monthsElapsed)
+      futureValueContributions(stocksMonthly, mInv, monthsElapsed)
     const cashEnd = futureValueLump(cashToday, mCash, monthsElapsed)
-    const stocksContribution = monthly * 12
+    const pensionContribution = pensionMonthly * 12
+    const stocksContribution = stocksMonthly * 12
 
-    const pensionGrowth = pensionEnd - prevPension
+    const pensionGrowth = pensionEnd - prevPension - pensionContribution
     const stocksGrowth = stocksEnd - prevStocks - stocksContribution
     const cashGrowth = cashEnd - prevCash
 
@@ -225,7 +284,7 @@ export function projectYearly(
       age: input.age + y,
       pension: {
         startValue: prevPension,
-        contribution: 0,
+        contribution: pensionContribution,
         growth: pensionGrowth,
         endValue: pensionEnd,
       },
@@ -238,7 +297,7 @@ export function projectYearly(
       cash: { startValue: prevCash, contribution: 0, growth: cashGrowth, endValue: cashEnd },
       total: {
         startValue: prevPension + prevStocks + prevCash,
-        contribution: stocksContribution,
+        contribution: pensionContribution + stocksContribution,
         growth: pensionGrowth + stocksGrowth + cashGrowth,
         endValue: pensionEnd + stocksEnd + cashEnd,
       },
@@ -269,11 +328,18 @@ export function forecast(
   input: ForecastInput,
   a: Assumptions = DEFAULT_ASSUMPTIONS,
 ): ForecastResult {
-  const monthly = clampMoney(input.monthly)
+  const stocksMonthly = clampMoney(input.monthly)
   const months = monthsToTarget(input.age, a.targetAge)
+  const { monthly: pensionMonthly, basis: pensionContributionBasis } =
+    resolvePensionMonthly(input)
 
-  const pension = breakdownFor(clampMoney(input.pension), 0, a.investedRate, months)
-  const stocks = breakdownFor(clampMoney(input.stocks), monthly, a.investedRate, months)
+  const pension = breakdownFor(
+    clampMoney(input.pension),
+    pensionMonthly,
+    a.investedRate,
+    months,
+  )
+  const stocks = breakdownFor(clampMoney(input.stocks), stocksMonthly, a.investedRate, months)
   const cash = breakdownFor(clampMoney(input.cash), 0, a.cashRate, months)
 
   const todayTotal = pension.today + stocks.today + cash.today
@@ -283,7 +349,7 @@ export function forecast(
   const marketAdds = projectedTotal - whatYouPutIn
 
   const scenarios: Scenario[] = SCENARIO_META.map((s) => {
-    const scenarioMonthly = s.delta === 'stop' ? 0 : monthly + s.delta
+    const scenarioMonthly = s.delta === 'stop' ? 0 : stocksMonthly + s.delta
     return {
       key: s.key,
       label: s.label,
@@ -310,5 +376,7 @@ export function forecast(
     scenarios,
     crossoverYear: findCrossoverYear(yearly),
     yearly,
+    pensionMonthlyUsed: pensionMonthly,
+    pensionContributionBasis,
   }
 }

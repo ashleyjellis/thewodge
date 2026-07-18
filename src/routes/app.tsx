@@ -13,7 +13,24 @@ function getSession(): { email: string } | null {
   return null
 }
 
+/**
+ * Every product hook (locked-assumption rows, the partner CTA, the save-forecast
+ * closer) links here with `?from=<hookId>` so this stub can acknowledge what
+ * brought someone here. This is cosmetic only — no destination screen is built;
+ * the real post-login journey picks up from this context later.
+ */
+const FROM_COPY: Record<string, string> = {
+  'cash-rate': 'You wanted to set your own cash rate.',
+  'invested-rate': 'You wanted to set your own investment rate.',
+  'employer-split': 'You wanted to enter your real pension contribution.',
+  partner: 'You wanted to add your partner.',
+  'save-forecast': 'You wanted to save your forecast.',
+}
+
 export const Route = createFileRoute('/app')({
+  validateSearch: (search: Record<string, unknown>): { from?: string } => ({
+    from: typeof search.from === 'string' ? search.from : undefined,
+  }),
   head: () => ({
     ...seo({
       title: `Your space — ${SITE_NAME}`,
@@ -34,6 +51,8 @@ export const Route = createFileRoute('/app')({
 
 function AppStub() {
   const session = getSession()
+  const { from } = Route.useSearch()
+  const fromLine = from ? FROM_COPY[from] : undefined
 
   return (
     <MaxWidthContainer className="py-24">
@@ -44,6 +63,12 @@ function AppStub() {
         <h1 className="mt-3 text-[30px] font-semibold tracking-tight">
           {session ? 'Your saved snapshots' : 'A quiet place to check in'}
         </h1>
+        {fromLine ? (
+          <p className="mt-4 text-[16px] leading-relaxed text-foreground">
+            {fromLine} That’s exactly the kind of thing an account will unlock —
+            it’s just not built yet.
+          </p>
+        ) : null}
         <p className="mt-4 text-[16px] leading-relaxed text-muted-foreground">
           Later, {SITE_NAME} will let you save a snapshot of your picture and
           return to see how the trajectory has moved — the same calm view, over
