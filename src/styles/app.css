@@ -49,4 +49,29 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum';
   }
+
+  /* Native disclosure chevron — calm 150ms turn, no JS. */
+  .drawer-chevron {
+    transition: transform 150ms ease;
+  }
+  details[open] > summary .drawer-chevron {
+    transform: rotate(180deg);
+  }
+  summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Trim number-input spinners for a calmer field. */
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
