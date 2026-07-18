@@ -6,6 +6,7 @@ import { Card, HeroFigure, Muted, Eyebrow, Closer } from '@/components/brand'
 import { StatRow } from '@/components/StatRow'
 import { StackedAreaChart, type AreaPoint } from '@/components/charts'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
+import { EducationCard } from '@/components/EducationCard'
 import { STEPS } from '@/lib/appNav'
 
 export const Route = createFileRoute('/app/the-machine')({
@@ -13,7 +14,7 @@ export const Route = createFileRoute('/app/the-machine')({
 })
 
 function TheMachine() {
-  const { analysis, baseYear } = useHousehold()
+  const { household, analysis, baseYear } = useHousehold()
   const { projection, investableToday, crossover, deployed } = analysis.combined
 
   const points: AreaPoint[] = projection.map((pt) => ({
@@ -93,6 +94,8 @@ function TheMachine() {
           />
         </HowWeWorkedThisOut>
       </Card>
+
+      <EducationCard household={household} />
 
       <Closer className="px-1 text-muted-foreground">
         The job is temporary. The machine is permanent.
