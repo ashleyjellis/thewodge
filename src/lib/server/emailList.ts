@@ -23,7 +23,7 @@ function normaliseEmail(input: unknown): string {
 }
 
 export const captureEmail = createServerFn({ method: 'POST' })
-  .inputValidator(normaliseEmail)
+  .validator(normaliseEmail)
   .handler(async ({ data: email }) => {
     // dynamic import keeps node:fs out of the client bundle entirely.
     const { appendFile, mkdir } = await import('node:fs/promises')

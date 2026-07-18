@@ -367,6 +367,8 @@ export type HouseholdStopScenario = {
   stopAge: number
   /** combined investable value at retirement if contributions freeze at stopAge */
   finalValue: number
+  /** the full frozen year-by-year series to the household horizon */
+  projection: ProjectionPoint[]
   /** the household's combined stocks value at the stop age (the bridge fund) */
   stocksAtStop: number
   /** can stocks alone bridge stopAge → pension access age? */
@@ -403,6 +405,7 @@ export function householdStopScenario(
     }),
   )
   const finalValue = frozen[frozen.length - 1]!.endValue
+  const projection = frozen
 
   // stocks-only projection to the stop age (with contributions until the stop)
   const stocksLegs = investableLegs(household).filter((l) => l.kind === 'stocks')
@@ -422,6 +425,7 @@ export function householdStopScenario(
   return {
     stopAge,
     finalValue,
+    projection,
     stocksAtStop,
     bridge: bridgeCheck(
       stocksAtStop,
