@@ -5,12 +5,14 @@ import { createHousehold } from './households'
 import { createPerson } from './people'
 import {
   accountTypeToPotCategory,
+  AccountAlreadyHasBalanceError,
   AccountOwnershipError,
   createAccount,
   getAccount,
   isValidAccountOwner,
   listAccounts,
   rollupByPotCategory,
+  setOpeningBalance,
   updateAccount,
 } from './accounts'
 import { listSnapshots } from './accountSnapshots'
@@ -178,5 +180,54 @@ describe('accounts (against a real migrated database)', () => {
           ('bad-row-2', ${householdId}, NULL, 'person_a', 'Test', 'pension', 'pension', ${new Date().toISOString()})
       `),
     ).rejects.toThrow()
+  })
+
+  it('updateAccount tolerates an empty patch (a PATCH carrying only openingBalance)', async () => {
+    const a = await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Nutmeg',
+      accountType: 'lisa',
+    })
+    await expect(updateAccount(db, a.id, {})).resolves.not.toThrow()
+  })
+
+  it('setOpeningBalance records the first balance for an account created without one', async () => {
+    const a = await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Aviva',
+      accountType: 'pension',
+    })
+    expect(a.currentBalance).toBeNull()
+
+    await setOpeningBalance(db, a.id, 42_000)
+
+    const reloaded = await getAccount(db, a.id)
+    expect(reloaded!.currentBalance).toBe(42_000)
+    const snaps = await listSnapshots(db, a.id)
+    expect(snaps).toHaveLength(1)
+    expect(snaps[0]!.startBalance).toBe(42_000)
+    expect(snaps[0]!.endBalance).toBe(42_000)
+  })
+
+  it('setOpeningBalance rejects an account that already has a balance', async () => {
+    const a = await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Fidelity',
+      accountType: 'pension',
+      openingBalance: 10_000,
+    })
+    await expect(setOpeningBalance(db, a.id, 20_000)).rejects.toBeInstanceOf(
+      AccountAlreadyHasBalanceError,
+    )
+    // unchanged — the rejected call must not have written anything
+    const reloaded = await getAccount(db, a.id)
+    expect(reloaded!.currentBalance).toBe(10_000)
+    expect(await listSnapshots(db, a.id)).toHaveLength(1)
   })
 })

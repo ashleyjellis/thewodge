@@ -95,7 +95,9 @@ export const accounts = sqliteTable(
     accountType: text('account_type').notNull().$type<AccountType>(),
     /** derived from accountType — see accountTypeToPotCategory(); never a raw input */
     potCategory: text('pot_category').notNull().$type<PotCategory>(),
-    /** cash only: true = emergency fund, excluded from "investable" views */
+    /** cash only: true = emergency fund. Always counted in totals and growth —
+     *  never excluded from anything. Only ever a display label (e.g. a future
+     *  "available to invest" view would call it out separately). */
     isRingFenced: integer('is_ring_fenced', { mode: 'boolean' }).notNull().default(false),
     /** cash only: e.g. house deposit */
     isGoalEarmarked: integer('is_goal_earmarked', { mode: 'boolean' }).notNull().default(false),

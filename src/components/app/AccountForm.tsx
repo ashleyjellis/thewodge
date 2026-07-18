@@ -1,14 +1,25 @@
 /**
- * Add/edit an account. Balance is only entered when ADDING — it creates the first
- * append-only snapshot (spec §2); editing a balance afterwards belongs to the
- * Growth tab's update flow (a later phase), never a direct silent edit here.
+ * Add/edit an account. Balance is entered when ADDING, or on EDIT for an account
+ * that was created without one (the "I skipped it" recovery path) — once a
+ * balance exists, further updates belong to the Growth tab's update flow (a
+ * later phase), never a direct silent edit here.
  * Ring-fenced/goal-earmarked only show once the chosen type resolves to cash.
  */
 import { useState } from 'react'
 import { personToOwner, type AccountOwner } from '@/lib/accountOwner'
+import { money } from '@/lib/format'
 import { AppField } from './AppField'
 import { AppSelect } from './AppSelect'
 import { AppCheckbox } from './AppCheckbox'
+
+export type ContributionEstimatePerson = {
+  id: string
+  name: string
+  salary: number | null
+  employerPensionUserPct: number | null
+  employerPensionMatchPct: number | null
+  employerPensionAdditionalPct: number | null
+}
 
 const ACCOUNT_TYPE_OPTIONS = [
   { value: 'cash_isa', label: 'Cash ISA' },
@@ -50,12 +61,15 @@ export function AccountForm({
   people,
   initial,
   isNew,
+  currentBalance = null,
   onSubmit,
   onCancel,
 }: {
-  people: { id: string; name: string }[]
+  people: ContributionEstimatePerson[]
   initial?: Partial<AccountFormValues>
   isNew: boolean
+  /** the account's real recorded balance — only meaningful on edit (isNew=false) */
+  currentBalance?: number | null
   onSubmit: (payload: AccountFormPayload) => Promise<void>
   onCancel: () => void
 }) {
@@ -74,6 +88,19 @@ export function AccountForm({
 
   const potCategory = accountTypeToPotCategory(values.accountType)
   const isCash = potCategory === 'cash'
+  // balance is entered on add, or on edit for an account that's never had one recorded
+  const showBalanceField = isNew || currentBalance === null
+
+  const selectedPerson = values.personId ? people.find((p) => p.id === values.personId) : null
+  const pensionPct = selectedPerson
+    ? (selectedPerson.employerPensionUserPct ?? 0) +
+      (selectedPerson.employerPensionMatchPct ?? 0) +
+      (selectedPerson.employerPensionAdditionalPct ?? 0)
+    : 0
+  const estimatedMonthly =
+    values.accountType === 'pension' && selectedPerson?.salary && pensionPct > 0
+      ? Math.round((selectedPerson.salary * pensionPct) / 12)
+      : null
 
   const submit = async () => {
     setSaving(true)
@@ -90,7 +117,7 @@ export function AccountForm({
         isRingFenced: isCash ? values.isRingFenced : false,
         isGoalEarmarked: isCash ? values.isGoalEarmarked : false,
         monthlyContribution: n(values.monthlyContribution) ?? 0,
-        openingBalance: isNew ? n(values.openingBalance) : undefined,
+        openingBalance: showBalanceField ? n(values.openingBalance) : undefined,
       })
     } finally {
       setSaving(false)
@@ -124,17 +151,31 @@ export function AccountForm({
           placeholder="Hargreaves Lansdown"
           className="col-span-2"
         />
-        <AppField
-          label="Monthly contribution"
-          prefix="£"
-          value={values.monthlyContribution}
-          onChange={set('monthlyContribution')}
-          placeholder="300"
-        />
-        {isNew ? (
+        <div className="flex flex-col gap-1.5">
+          <AppField
+            label="Monthly contribution"
+            prefix="£"
+            inputMode="decimal"
+            value={values.monthlyContribution}
+            onChange={set('monthlyContribution')}
+            placeholder="300"
+          />
+          {estimatedMonthly !== null ? (
+            <button
+              type="button"
+              onClick={() => set('monthlyContribution')(String(estimatedMonthly))}
+              className="text-left text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Estimate from {selectedPerson!.name}'s salary & pension %: {money(estimatedMonthly)}
+              /mo — use this
+            </button>
+          ) : null}
+        </div>
+        {showBalanceField ? (
           <AppField
             label="Current balance"
             prefix="£"
+            inputMode="decimal"
             value={values.openingBalance}
             onChange={set('openingBalance')}
             placeholder="60,000"
@@ -144,7 +185,7 @@ export function AccountForm({
           <>
             <AppCheckbox
               label="Ring-fenced"
-              hint="emergency fund — excluded from investable views"
+              hint="emergency fund — still counted and still grows, just labelled separately"
               checked={values.isRingFenced}
               onChange={set('isRingFenced')}
             />

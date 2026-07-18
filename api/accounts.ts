@@ -8,10 +8,12 @@
  */
 import { getDb, type Db } from '../src/server/db/client.js'
 import {
+  AccountAlreadyHasBalanceError,
   AccountOwnershipError,
   createAccount,
   isValidAccountOwner,
   listAccounts,
+  setOpeningBalance,
   updateAccount,
   type AccountPatch,
   type NewAccount,
@@ -82,6 +84,9 @@ export async function handleAccounts(db: Db, req: ApiRequest, res: ApiResponse):
         patch.monthlyContribution = body.monthlyContribution
 
       await updateAccount(db, body.id, patch)
+      if (typeof body.openingBalance === 'number') {
+        await setOpeningBalance(db, body.id, body.openingBalance)
+      }
       res.status(200).json({ ok: true })
       return
     }
@@ -89,6 +94,7 @@ export async function handleAccounts(db: Db, req: ApiRequest, res: ApiResponse):
     methodNotAllowed(res)
   } catch (err) {
     if (err instanceof AccountOwnershipError) return badRequest(res, err.message)
+    if (err instanceof AccountAlreadyHasBalanceError) return badRequest(res, err.message)
     serverError(res, err)
   }
 }

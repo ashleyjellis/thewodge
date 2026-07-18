@@ -147,6 +147,7 @@ export function PersonCard({
           value={values.salary}
           onChange={set('salary')}
           placeholder="88,000"
+          inputMode="decimal"
         />
         <AppField
           label="Bonus"
@@ -154,6 +155,7 @@ export function PersonCard({
           value={values.bonus}
           onChange={set('bonus')}
           placeholder="12,000"
+          inputMode="decimal"
         />
         <AppField
           label="Employer pension"

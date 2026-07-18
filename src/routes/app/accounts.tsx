@@ -114,6 +114,9 @@ function AccountsPage() {
         isRingFenced: payload.isRingFenced,
         isGoalEarmarked: payload.isGoalEarmarked,
         monthlyContribution: payload.monthlyContribution,
+        ...(payload.openingBalance !== undefined
+          ? { openingBalance: payload.openingBalance }
+          : {}),
       })
       setEditingAccountId(null)
     } else {
@@ -200,7 +203,7 @@ function AccountsPage() {
         {addingAccount ? (
           <div className="mt-4">
             <AccountForm
-              people={people.map((p) => ({ id: p.id, name: p.name }))}
+              people={people}
               isNew
               onSubmit={saveAccount}
               onCancel={() => setAddingAccount(false)}
@@ -211,8 +214,9 @@ function AccountsPage() {
         {editingAccount ? (
           <div className="mt-4">
             <AccountForm
-              people={people.map((p) => ({ id: p.id, name: p.name }))}
+              people={people}
               isNew={false}
+              currentBalance={editingAccount.currentBalance}
               initial={{
                 personId: editingAccount.personId,
                 provider: editingAccount.provider,

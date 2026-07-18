@@ -38,6 +38,22 @@ export function accountTypeToPotCategory(accountType: AccountType): PotCategory 
 }
 
 export class AccountOwnershipError extends Error {}
+export class AccountAlreadyHasBalanceError extends Error {}
+
+async function writeOpeningBalanceSnapshot(db: Db, accountId: string, balance: number): Promise<void> {
+  const opened = new Date()
+  await insertSnapshot(db, {
+    accountId,
+    year: opened.getUTCFullYear(),
+    month: opened.getUTCMonth() + 1,
+    startBalance: balance,
+    endBalance: balance,
+    moneyIn: null,
+    transferOut: null,
+    isEstimated: false,
+    note: 'Opening balance',
+  })
+}
 
 export type NewAccount = {
   householdId: string
@@ -87,21 +103,27 @@ export async function createAccount(db: Db, input: NewAccount): Promise<Account>
   await db.insert(accounts).values(row)
 
   if (input.openingBalance !== undefined) {
-    const opened = new Date(now)
-    await insertSnapshot(db, {
-      accountId: id,
-      year: opened.getUTCFullYear(),
-      month: opened.getUTCMonth() + 1,
-      startBalance: input.openingBalance,
-      endBalance: input.openingBalance,
-      moneyIn: null,
-      transferOut: null,
-      isEstimated: false,
-      note: 'Opening balance',
-    })
+    await writeOpeningBalanceSnapshot(db, id, input.openingBalance)
   }
 
   return row
+}
+
+/**
+ * Records the first balance for an account that was created without one — the
+ * "I skipped it at creation" recovery path. Rejects once a balance already
+ * exists: from then on, updates belong to the Growth tab's snapshot flow (a
+ * later phase), never a silent overwrite here.
+ */
+export async function setOpeningBalance(db: Db, accountId: string, balance: number): Promise<void> {
+  const account = await getAccount(db, accountId)
+  if (!account) throw new Error('account not found')
+  if (account.currentBalance !== null) {
+    throw new AccountAlreadyHasBalanceError(
+      'This account already has a recorded balance — further updates belong in the Growth tab',
+    )
+  }
+  await writeOpeningBalanceSnapshot(db, accountId, balance)
 }
 
 export type AccountPatch = Partial<
@@ -115,12 +137,17 @@ export type AccountPatch = Partial<
   >
 >
 
-/** Editing accountType re-derives potCategory automatically — the two can never drift. */
+/**
+ * Editing accountType re-derives potCategory automatically — the two can never
+ * drift. A no-op patch (e.g. a PATCH that only carries openingBalance) is a
+ * valid call, not an error — Drizzle rejects an empty .set(), so guard it here.
+ */
 export async function updateAccount(db: Db, id: string, patch: AccountPatch): Promise<void> {
   const values: Partial<Account> = { ...patch }
   if (patch.accountType) {
     values.potCategory = accountTypeToPotCategory(patch.accountType)
   }
+  if (Object.keys(values).length === 0) return
   await db.update(accounts).set(values).where(eq(accounts.id, id))
 }
 

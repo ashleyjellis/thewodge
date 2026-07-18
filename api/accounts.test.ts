@@ -118,4 +118,50 @@ describe('accounts API', () => {
     )
     expect(updated!.potCategory).toBe('pension')
   })
+
+  it('PATCH with openingBalance records the first balance for an account created without one', async () => {
+    const createRes = fakeRes()
+    await handleAccounts(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: { householdId, personId, owner: 'person_a', provider: 'Aviva', accountType: 'pension' },
+      }),
+      createRes.res,
+    )
+    const account = (createRes.body() as { account: { id: string; currentBalance: number | null } }).account
+    expect(account.currentBalance).toBeNull()
+
+    const { res, status } = fakeRes()
+    await handleAccounts(
+      db,
+      fakeReq({ method: 'PATCH', body: { id: account.id, openingBalance: 42_000 } }),
+      res,
+    )
+    expect(status()).toBe(200)
+
+    const reGet = fakeRes()
+    await handleAccounts(db, fakeReq({ method: 'GET', query: { householdId } }), reGet.res)
+    const updated = (
+      reGet.body() as { accounts: { id: string; currentBalance: number | null }[] }
+    ).accounts.find((a) => a.id === account.id)
+    expect(updated!.currentBalance).toBe(42_000)
+  })
+
+  it('PATCH with openingBalance rejects an account that already has a balance', async () => {
+    const listRes = fakeRes()
+    await handleAccounts(db, fakeReq({ method: 'GET', query: { householdId } }), listRes.res)
+    const hl = (listRes.body() as { accounts: { id: string; provider: string }[] }).accounts.find(
+      (a) => a.provider === 'HL',
+    )!
+
+    const { res, status, body } = fakeRes()
+    await handleAccounts(
+      db,
+      fakeReq({ method: 'PATCH', body: { id: hl.id, openingBalance: 99_000 } }),
+      res,
+    )
+    expect(status()).toBe(400)
+    expect((body() as { error: string }).error).toBeTruthy()
+  })
 })

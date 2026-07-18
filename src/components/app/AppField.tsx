@@ -5,6 +5,17 @@
  */
 import { cn } from '@/lib/cn'
 
+/** Keystroke-level filtering — prevents letters ever landing in a numeric field,
+ *  rather than validating after the fact. 'decimal' keeps at most one '.'. */
+function filterInput(raw: string, mode: 'text' | 'numeric' | 'decimal'): string {
+  if (mode === 'text') return raw
+  if (mode === 'numeric') return raw.replace(/[^\d]/g, '')
+  const cleaned = raw.replace(/[^\d.]/g, '')
+  const firstDot = cleaned.indexOf('.')
+  if (firstDot === -1) return cleaned
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '')
+}
+
 export function AppField({
   label,
   hint,
@@ -24,7 +35,7 @@ export function AppField({
   inputMode?: 'text' | 'numeric' | 'decimal'
   className?: string
 }) {
-  const handle = (raw: string) => onChange(prefix ? raw.replace(/,/g, '') : raw)
+  const handle = (raw: string) => onChange(filterInput(raw, inputMode))
   return (
     <label className={cn('flex h-full flex-col', className)}>
       <span className="text-[13px] font-medium leading-snug text-foreground">
