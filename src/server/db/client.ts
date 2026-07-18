@@ -3,9 +3,10 @@
  *
  * Reads connection details from env. When TURSO_DATABASE_URL is set, connects to
  * the real Turso database (encryption at rest whenever TURSO_ENCRYPTION_KEY is
- * also present). When unset, falls back to a local libSQL file
- * (.data/wodge-app.db, gitignored) — no network required, used by tests and local
- * dev. Same schema, same query functions, either way.
+ * also present). When unset — or when WODGE_FORCE_LOCAL_DB=1 overrides it — falls
+ * back to a local libSQL file (.data/wodge-app.db, gitignored) — no network
+ * required, used by tests and local dev. Same schema, same query functions,
+ * either way.
  */
 import 'dotenv/config'
 import { createClient, type Client } from '@libsql/client'
@@ -18,7 +19,11 @@ let client: Client | null = null
 let db: Db | null = null
 
 function buildClient(): Client {
-  const url = process.env.TURSO_DATABASE_URL
+  // explicit escape hatch: force local file mode even when Turso credentials are
+  // present in .env — handy when working somewhere that can't reach Turso's
+  // network, without having to move .env aside.
+  const forceLocal = process.env.WODGE_FORCE_LOCAL_DB === '1'
+  const url = forceLocal ? undefined : process.env.TURSO_DATABASE_URL
   if (url) {
     return createClient({
       url,

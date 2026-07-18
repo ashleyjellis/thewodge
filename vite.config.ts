@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { apiDevMiddleware } from './vite.apiDevMiddleware'
 
 // Indexable routes are prerendered to static HTML at build so crawlers and share
 // cards get real per-page <title>/meta/OG. /results and /app are excluded on
@@ -29,6 +30,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
+    apiDevMiddleware(),
     tailwindcss(),
     tanstackStart({
       spa: { enabled: true },

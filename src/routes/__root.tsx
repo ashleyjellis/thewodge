@@ -4,6 +4,7 @@ import {
   HeadContent,
   Outlet,
   Scripts,
+  useRouterState,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import appCss from '@/styles/app.css?url'
@@ -50,14 +51,17 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+  // /app has its own chrome (AppShell) — the marketing SiteHeader/SiteFooter
+  // don't belong there.
+  const isApp = useRouterState({ select: (s) => s.location.pathname.startsWith('/app') })
   return (
     <RootDocument>
       <div className="flex min-h-dvh flex-col">
-        <SiteHeader />
+        {isApp ? null : <SiteHeader />}
         <div className="flex-1">
           <Outlet />
         </div>
-        <SiteFooter />
+        {isApp ? null : <SiteFooter />}
       </div>
     </RootDocument>
   )

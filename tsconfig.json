@@ -22,6 +22,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "*.ts", "*.tsx"],
+  "include": ["src", "api", "vite.config.ts", "drizzle.config.ts", "scripts", "*.ts", "*.tsx"],
   "exclude": ["node_modules", "dist", ".output", ".nitro"]
 }
