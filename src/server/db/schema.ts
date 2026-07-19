@@ -194,3 +194,72 @@ export const forecastSnapshots = sqliteTable(
     check('forecast_snapshots_type_check', sql`${t.type} in ('baseline','replan')`),
   ],
 )
+
+// ── contribution_changes ──────────────────────────────────────────────────
+// A live, editable schedule of future changes to one pot's monthly
+// contribution — powers the Plan table's own live projection, entirely
+// separate from forecast_snapshots' frozen baseline/replan model. Unlike
+// account_snapshots this is NOT append-only: it's a working plan, not a
+// historical record, so rows are freely updated/deleted (see
+// contributionChanges.ts).
+
+export const CONTRIBUTION_CHANGE_TYPES = ['set', 'grow_pct'] as const
+export type ContributionChangeType = (typeof CONTRIBUTION_CHANGE_TYPES)[number]
+
+export const contributionChanges = sqliteTable(
+  'contribution_changes',
+  {
+    id: text('id').primaryKey(),
+    householdId: text('household_id')
+      .notNull()
+      .references(() => households.id),
+    owner: text('owner').notNull().$type<AccountOwner>(),
+    potCategory: text('pot_category').notNull().$type<PotCategory>(),
+    /** the calendar year this change first takes effect */
+    effectiveYear: integer('effective_year').notNull(),
+    changeType: text('change_type').notNull().$type<ContributionChangeType>(),
+    /** 'set': new flat £/month. 'grow_pct': fractional annual growth (0.01 =
+     *  1%), applied every year from effectiveYear onward until superseded —
+     *  see scheduledPlan.ts's resolveMonthlySchedule for the exact math. */
+    value: real('value').notNull(),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('contribution_changes_household_id_idx').on(t.householdId),
+    check('contribution_changes_owner_check', sql`${t.owner} in ('person_a','person_b','joint')`),
+    check(
+      'contribution_changes_pot_category_check',
+      sql`${t.potCategory} in ('pension','investments','cash')`,
+    ),
+    check('contribution_changes_change_type_check', sql`${t.changeType} in ('set','grow_pct')`),
+  ],
+)
+
+// ── planned_events ────────────────────────────────────────────────────────
+// One-off amounts in or out of a pot at a specific year — a house deposit, a
+// big purchase — layered onto the live Plan projection alongside
+// contribution_changes. Same editable/deletable reasoning as above.
+
+export const plannedEvents = sqliteTable(
+  'planned_events',
+  {
+    id: text('id').primaryKey(),
+    householdId: text('household_id')
+      .notNull()
+      .references(() => households.id),
+    owner: text('owner').notNull().$type<AccountOwner>(),
+    potCategory: text('pot_category').notNull().$type<PotCategory>(),
+    year: integer('year').notNull(),
+    name: text('name').notNull(),
+    /** positive = money in, negative = money out */
+    amount: real('amount').notNull(),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('planned_events_household_id_idx').on(t.householdId),
+    check('planned_events_owner_check', sql`${t.owner} in ('person_a','person_b','joint')`),
+    check('planned_events_pot_category_check', sql`${t.potCategory} in ('pension','investments','cash')`),
+  ],
+)
