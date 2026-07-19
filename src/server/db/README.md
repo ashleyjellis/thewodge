@@ -6,9 +6,12 @@ this module's typed query functions and never write raw SQL.
 
 ## Tables
 
-Five tables, exactly as specified: `households`, `people`, `accounts`,
-`account_snapshots`, `forecast_snapshots` — see `schema.ts` for the full column
-list and the reasoning behind each nullability choice.
+The original five, exactly as specified: `households`, `people`, `accounts`,
+`account_snapshots`, `forecast_snapshots`. Plus two added for the live Plan
+table (feedback round 3): `contribution_changes` and `planned_events` — unlike
+everything above, these are NOT append-only, since they're a working plan a
+user edits freely, not a historical record. See `schema.ts` for the full
+column list and the reasoning behind each nullability choice.
 
 Two invariants enforced at the data-access layer (and, where practical, by a DB
 `CHECK` constraint too — see `accounts.test.ts` for tests that bypass the
