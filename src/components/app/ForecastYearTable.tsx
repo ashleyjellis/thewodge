@@ -17,9 +17,11 @@ const POT_FILTERS: { value: PotFilter; label: string }[] = [
   { value: 'pension', label: 'Pension' },
 ]
 
-function cell(value: number | null, className?: string) {
+function cell(value: number | null, className?: string, divider?: boolean) {
   return (
-    <td className={cn('py-2.5 pr-3 text-right', className)}>{value !== null ? money(value) : '—'}</td>
+    <td className={cn('py-2.5 pr-3 text-right', divider && 'border-l border-border pl-3', className)}>
+      {value !== null ? money(value) : '—'}
+    </td>
   )
 }
 
@@ -68,26 +70,35 @@ export function ForecastYearTable({
                   Original
                 </th>
               ) : null}
-              <th colSpan={2} className="py-2 pr-3 text-right font-medium">
+              <th
+                colSpan={2}
+                className="border-l border-border py-2 pl-3 pr-3 text-center font-semibold text-foreground/70"
+              >
                 Value
               </th>
-              <th colSpan={2} className="py-2 pr-3 text-right font-medium">
+              <th
+                colSpan={2}
+                className="border-l border-border py-2 pl-3 pr-3 text-center font-semibold text-foreground/70"
+              >
                 Growth
               </th>
-              <th colSpan={2} className="py-2 pr-3 text-right font-medium">
+              <th
+                colSpan={2}
+                className="border-l border-border py-2 pl-3 pr-3 text-center font-semibold text-foreground/70"
+              >
                 Additions
               </th>
-              <th rowSpan={2} className="py-2 text-right align-bottom font-medium">
+              <th rowSpan={2} className="border-l border-border py-2 pl-3 text-right align-bottom font-medium">
                 Variance
               </th>
             </tr>
             <tr className="text-[10px]">
-              <th className="pb-2 pr-3 text-right font-medium">Forecast</th>
-              <th className="pb-2 pr-3 text-right font-medium">Actual</th>
-              <th className="pb-2 pr-3 text-right font-medium">Forecast</th>
-              <th className="pb-2 pr-3 text-right font-medium">Actual</th>
-              <th className="pb-2 pr-3 text-right font-medium">Forecast</th>
-              <th className="pb-2 pr-3 text-right font-medium">Actual</th>
+              <th className="border-l border-border pb-2 pl-3 pr-3 text-right font-normal">Forecast</th>
+              <th className="pb-2 pr-3 text-right font-normal">Actual</th>
+              <th className="border-l border-border pb-2 pl-3 pr-3 text-right font-normal">Forecast</th>
+              <th className="pb-2 pr-3 text-right font-normal">Actual</th>
+              <th className="border-l border-border pb-2 pl-3 pr-3 text-right font-normal">Forecast</th>
+              <th className="pb-2 pr-3 text-right font-normal">Actual</th>
             </tr>
           </thead>
           <tbody>
@@ -107,13 +118,13 @@ export function ForecastYearTable({
                     ) : null}
                   </td>
                   {hasOriginal ? cell(row.originalValue, 'text-muted-foreground/50') : null}
-                  {cell(row.forecastValue, 'font-semibold text-foreground')}
+                  {cell(row.forecastValue, 'font-semibold text-foreground', true)}
                   {cell(row.actualValue, 'text-muted-foreground')}
-                  {cell(row.forecastGrowth, 'text-muted-foreground')}
+                  {cell(row.forecastGrowth, 'text-muted-foreground', true)}
                   {cell(row.actualGrowth, 'text-muted-foreground')}
-                  {cell(row.forecastAdditions, 'text-muted-foreground')}
+                  {cell(row.forecastAdditions, 'text-muted-foreground', true)}
                   {cell(row.actualAdditions, 'text-muted-foreground')}
-                  <td className="py-2.5 text-right text-muted-foreground">
+                  <td className="border-l border-border py-2.5 pl-3 text-right text-muted-foreground">
                     {row.actualValue !== null
                       ? `${money(row.actualValue - row.forecastValue)} · ${varianceLabel(row.actualValue, row.forecastValue)}`
                       : '—'}
