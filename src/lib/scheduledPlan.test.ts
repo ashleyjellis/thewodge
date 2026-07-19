@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildScheduledPlan,
   projectScheduledYearly,
   resolveMonthlySchedule,
   type ContributionChange,
+  type OwnerScopedContributionChange,
+  type OwnerScopedPlannedEvent,
   type PlannedEvent,
+  type ScheduledPlanAccount,
   type ScheduledPlanInput,
 } from './scheduledPlan'
 
@@ -162,5 +166,108 @@ describe('projectScheduledYearly', () => {
         5,
       )
     }
+  })
+})
+
+describe('buildScheduledPlan', () => {
+  const household = { retirementAge: 60, realReturn: 0.07, cashReturn: 0.045 }
+  const people = [{ age: 30 }, { age: 32 }]
+  const accounts: ScheduledPlanAccount[] = [
+    { owner: 'person_a', potCategory: 'investments', monthlyContribution: 500, currentBalance: 10_000 },
+    { owner: 'person_b', potCategory: 'investments', monthlyContribution: 300, currentBalance: 4_000 },
+    { owner: 'joint', potCategory: 'cash', monthlyContribution: 0, currentBalance: 2_000 },
+  ]
+
+  it('returns null for a person who does not exist yet', () => {
+    const result = buildScheduledPlan({
+      owner: 'person_b',
+      startYear: 2026,
+      people: [{ age: 30 }], // only person_a exists
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })
+    expect(result).toBeNull()
+  })
+
+  it("'total' anchors to the younger person's age and includes every owner's accounts", () => {
+    const result = buildScheduledPlan({
+      owner: 'total',
+      startYear: 2026,
+      people,
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })!
+    expect(result[0]!.age).toBe(30) // the younger of 30/32
+    expect(result[0]!.investments.startValue).toBe(14_000) // person_a + person_b
+    expect(result[0]!.cash.startValue).toBe(2_000) // joint
+  })
+
+  it('a specific owner only sees their own accounts and age', () => {
+    const result = buildScheduledPlan({
+      owner: 'person_a',
+      startYear: 2026,
+      people,
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })!
+    expect(result[0]!.age).toBe(30)
+    expect(result[0]!.investments.startValue).toBe(10_000) // not person_b's 4,000
+  })
+
+  it("a specific owner's changes/events are scoped — another owner's don't leak in", () => {
+    const changes: OwnerScopedContributionChange[] = [
+      { owner: 'person_a', potCategory: 'investments', effectiveYear: 2028, changeType: 'set', value: 900 },
+      { owner: 'person_b', potCategory: 'investments', effectiveYear: 2028, changeType: 'set', value: 100 },
+    ]
+    const result = buildScheduledPlan({
+      owner: 'person_a',
+      startYear: 2026,
+      people,
+      household,
+      accounts,
+      changes,
+      events: [],
+    })!
+    expect(result.find((p) => p.calendarYear === 2028)!.investments.contribution).toBe(900 * 12)
+  })
+
+  it("'total' pools every owner's changes/events together", () => {
+    const events: OwnerScopedPlannedEvent[] = [
+      { owner: 'joint', potCategory: 'cash', year: 2027, amount: 5_000 },
+    ]
+    const result = buildScheduledPlan({
+      owner: 'total',
+      startYear: 2026,
+      people,
+      household,
+      accounts,
+      changes: [],
+      events,
+    })!
+    expect(result.find((p) => p.calendarYear === 2027)!.cash.events).toBe(5_000)
+  })
+
+  it('cash grows at the household cash rate, investments at the invested rate', () => {
+    const result = buildScheduledPlan({
+      owner: 'total',
+      startYear: 2026,
+      people,
+      household: { retirementAge: 35, realReturn: 0.5, cashReturn: 0 }, // exaggerated to make the split obvious
+      accounts: [
+        { owner: 'joint', potCategory: 'investments', monthlyContribution: 0, currentBalance: 10_000 },
+        { owner: 'joint', potCategory: 'cash', monthlyContribution: 0, currentBalance: 10_000 },
+      ],
+      changes: [],
+      events: [],
+    })!
+    const y1 = result.find((p) => p.calendarYear === 2027)!
+    expect(y1.investments.growth).toBeGreaterThan(0)
+    expect(y1.cash.growth).toBe(0) // 0% cash rate — no growth at all
   })
 })

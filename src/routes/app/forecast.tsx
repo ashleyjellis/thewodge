@@ -11,6 +11,7 @@ import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
 import { useForecast } from '@/state/useForecast'
+import { usePlan } from '@/state/usePlan'
 import { postJson } from '@/lib/apiClient'
 import { forecast, projectYearly, type YearPoint } from '@/lib/forecast'
 import {
@@ -20,10 +21,12 @@ import {
   type OwnerFilter,
   type PotFilter,
 } from '@/lib/householdForecast'
+import { buildScheduledPlan } from '@/lib/scheduledPlan'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { ForecastYearTable } from '@/components/app/ForecastYearTable'
+import { PlanTable } from '@/components/app/PlanTable'
 import { AppField } from '@/components/app/AppField'
 import { FilterPill } from '@/components/app/FilterPill'
 import { NavLink } from '@/components/NavLink'
@@ -54,9 +57,17 @@ function Forecast() {
     error: forecastError,
     refetch,
   } = useForecast(household?.id ?? null)
+  const {
+    contributionChanges,
+    plannedEvents,
+    addContributionChange,
+    addPlannedEvent,
+    removePlannedEvent,
+  } = usePlan(household?.id ?? null)
 
   const [owner, setOwner] = useState<OwnerFilter>('total')
   const [pot, setPot] = useState<PotFilter>('total')
+  const [planPot, setPlanPot] = useState<PotFilter>('total')
   const [replanning, setReplanning] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -159,6 +170,19 @@ function Forecast() {
     result.crossoverYear !== null
       ? new Date(current.createdAt).getUTCFullYear() + result.crossoverYear
       : null
+
+  // the live Plan table — always reflects the current schedule immediately,
+  // unlike everything above which reads from the frozen baseline
+  const planDefaultOwner = owner === 'total' ? (people[0] ? 'person_a' : 'joint') : owner
+  const planPoints = buildScheduledPlan({
+    owner,
+    startYear: currentCalendarYear - 1,
+    people,
+    household,
+    accounts,
+    changes: contributionChanges,
+    events: plannedEvents,
+  })
 
   const years = Math.max(0, result.targetAge - input.age)
   // live, not the frozen plan-of-record — "today" should always reflect what
@@ -280,6 +304,23 @@ function Forecast() {
           </tbody>
         </table>
       </div>
+
+      {planPoints ? (
+        <PlanTable
+          points={planPoints}
+          pot={planPot}
+          onPotChange={setPlanPot}
+          people={people}
+          defaultOwner={planDefaultOwner}
+          investedRate={household.realReturn}
+          cashRate={household.cashReturn}
+          contributionChanges={contributionChanges}
+          plannedEvents={plannedEvents}
+          onAddContributionChange={addContributionChange}
+          onAddPlannedEvent={addPlannedEvent}
+          onRemovePlannedEvent={removePlannedEvent}
+        />
+      ) : null}
 
       <ForecastYearTable
         rows={rows}

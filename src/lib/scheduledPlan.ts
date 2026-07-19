@@ -8,7 +8,8 @@
  * module: forecast.ts stays untouched and unaffected by any of this.
  */
 import { futureValueContributions, futureValueLump, monthlyRate } from './forecast.js'
-import type { PotCategory } from './householdForecast.js'
+import type { AccountOwner } from './accountOwner.js'
+import type { OwnerFilter, PotCategory } from './householdForecast.js'
 
 const POT_CATEGORIES: readonly PotCategory[] = ['pension', 'investments', 'cash']
 
@@ -202,4 +203,77 @@ export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYear
   }
 
   return points
+}
+
+export type ScheduledPlanAccount = {
+  owner: AccountOwner
+  potCategory: PotCategory
+  monthlyContribution: number
+  currentBalance: number | null
+}
+
+export type OwnerScopedContributionChange = ContributionChange & { owner: AccountOwner }
+export type OwnerScopedPlannedEvent = PlannedEvent & { owner: AccountOwner }
+
+function resolveOwnerAge(owner: OwnerFilter, people: { age: number }[]): number | null {
+  if (owner === 'person_a') return people[0]?.age ?? null
+  if (owner === 'person_b') return people[1]?.age ?? null
+  // 'total' and 'joint' both anchor to the younger person's age, matching
+  // aggregateHouseholdState's convention — joint accounts have no person of
+  // their own, and 'total' runs to the later person's retirement, not the
+  // sooner one's
+  return people.length > 0 ? Math.min(...people.map((p) => p.age)) : null
+}
+
+/**
+ * Resolves live household + accounts + schedule state into one owner's
+ * scheduled projection — the Plan table's data source. Unlike
+ * aggregateHouseholdState, this reads current live data every time (no
+ * frozen snapshot): the Plan table is a working "what if" view, not a
+ * commitment record.
+ */
+export function buildScheduledPlan(params: {
+  owner: OwnerFilter
+  startYear: number
+  people: { age: number }[]
+  household: { retirementAge: number; realReturn: number; cashReturn: number }
+  accounts: ScheduledPlanAccount[]
+  changes: OwnerScopedContributionChange[]
+  events: OwnerScopedPlannedEvent[]
+}): ScheduledYearPoint[] | null {
+  const age = resolveOwnerAge(params.owner, params.people)
+  if (age === null) return null
+
+  const accounts =
+    params.owner === 'total' ? params.accounts : params.accounts.filter((a) => a.owner === params.owner)
+  const changes =
+    params.owner === 'total' ? params.changes : params.changes.filter((c) => c.owner === params.owner)
+  const events = params.owner === 'total' ? params.events : params.events.filter((e) => e.owner === params.owner)
+
+  const sumBalance = (pot: PotCategory) =>
+    accounts.filter((a) => a.potCategory === pot).reduce((s, a) => s + (a.currentBalance ?? 0), 0)
+  const sumMonthly = (pot: PotCategory) =>
+    accounts.filter((a) => a.potCategory === pot).reduce((s, a) => s + a.monthlyContribution, 0)
+  const rateFor = (pot: PotCategory) => (pot === 'cash' ? params.household.cashReturn : params.household.realReturn)
+
+  const pots = Object.fromEntries(
+    POT_CATEGORIES.map((pot) => [
+      pot,
+      { balance: sumBalance(pot), rate: rateFor(pot), baseMonthly: sumMonthly(pot) },
+    ]),
+  ) as ScheduledPlanInput['pots']
+
+  return projectScheduledYearly({
+    startYear: params.startYear,
+    age,
+    targetAge: params.household.retirementAge,
+    pots,
+    changes: changes.map((c) => ({
+      potCategory: c.potCategory,
+      effectiveYear: c.effectiveYear,
+      changeType: c.changeType,
+      value: c.value,
+    })),
+    events: events.map((e) => ({ potCategory: e.potCategory, year: e.year, amount: e.amount })),
+  })
 }
