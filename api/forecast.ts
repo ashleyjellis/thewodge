@@ -13,10 +13,10 @@ import { listAccounts } from '../src/server/db/accounts.js'
 import {
   createBaseline,
   createReplan,
-  getCurrentBaseline,
-  getOriginalBaseline,
+  listForecastSnapshots,
+  type ForecastSnapshot,
 } from '../src/server/db/forecastSnapshots.js'
-import { aggregateHouseholdState, canForecast } from '../src/lib/householdForecast.js'
+import { aggregateHouseholdState, canForecast, isValidFrozenState } from '../src/lib/householdForecast.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -25,6 +25,19 @@ import {
   type ApiRequest,
   type ApiResponse,
 } from './_lib/http.js'
+
+/**
+ * A snapshot's householdStateJson can predate a shape change (e.g. the
+ * owner-filter rework that nested totals under total/personA/personB/joint) —
+ * old rows are never migrated, they're just never trusted again.
+ */
+function isStoredStateValid(householdStateJson: string): boolean {
+  try {
+    return isValidFrozenState(JSON.parse(householdStateJson))
+  } catch {
+    return false
+  }
+}
 
 export async function handleForecast(db: Db, req: ApiRequest, res: ApiResponse): Promise<void> {
   try {
@@ -41,12 +54,19 @@ export async function handleForecast(db: Db, req: ApiRequest, res: ApiResponse):
         return
       }
 
-      let current = await getCurrentBaseline(db, householdId)
+      // ignore any row whose JSON predates the current FrozenForecastState
+      // shape — treated the same as if it were never recorded, never trusted
+      // just because it happens to parse
+      const validSnapshots = (await listForecastSnapshots(db, householdId)).filter((s) =>
+        isStoredStateValid(s.householdStateJson),
+      )
+
+      let current: ForecastSnapshot | null = validSnapshots.at(-1) ?? null
       if (!current) {
         const state = aggregateHouseholdState(household, people, accounts)
         current = await createBaseline(db, householdId, JSON.stringify(state))
       }
-      const original = await getOriginalBaseline(db, householdId)
+      const original = validSnapshots.find((s) => s.type === 'baseline') ?? current
 
       res.status(200).json({ ok: true, ready: true, current, original })
       return

@@ -4,6 +4,7 @@ import {
   aggregateHouseholdState,
   buildForecastYearRows,
   canForecast,
+  isValidFrozenState,
   ownerStateToForecastInput,
   varianceLabel,
   yearlyByCalendarYear,
@@ -115,6 +116,57 @@ describe('ownerStateToForecastInput', () => {
   it('maps the joint slice', () => {
     const result = ownerStateToForecastInput(state, 'joint')!
     expect(result.input.cash).toBe(12_000)
+  })
+})
+
+describe('isValidFrozenState', () => {
+  const state: FrozenForecastState = {
+    targetAge: 60,
+    investedRate: 0.07,
+    cashRate: 0.045,
+    total: { age: 34, pension: 140_000, stocks: 30_000, cash: 12_000, monthly: 300, pensionMonthly: 500 },
+    personA: { age: 36, pension: 100_000, stocks: 20_000, cash: 0, monthly: 200, pensionMonthly: 500 },
+    personB: null,
+    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0 },
+  }
+
+  it('accepts a well-formed current-shape state', () => {
+    expect(isValidFrozenState(state)).toBe(true)
+  })
+
+  it('accepts personA/personB being null', () => {
+    expect(isValidFrozenState({ ...state, personA: null, personB: null })).toBe(true)
+  })
+
+  it('rejects a pre-owner-filter flat baseline — the exact shape stored before this change shipped', () => {
+    const legacyFlatState = {
+      age: 36,
+      targetAge: 58,
+      pension: 140_000,
+      stocks: 30_000,
+      cash: 12_000,
+      monthly: 300,
+      pensionMonthly: 500,
+      investedRate: 0.07,
+      cashRate: 0.045,
+    }
+    expect(isValidFrozenState(legacyFlatState)).toBe(false)
+  })
+
+  it('rejects null, undefined, and non-objects', () => {
+    expect(isValidFrozenState(null)).toBe(false)
+    expect(isValidFrozenState(undefined)).toBe(false)
+    expect(isValidFrozenState('not an object')).toBe(false)
+    expect(isValidFrozenState(42)).toBe(false)
+  })
+
+  it('rejects a state missing the total slice', () => {
+    const { total: _total, ...rest } = state
+    expect(isValidFrozenState(rest)).toBe(false)
+  })
+
+  it('rejects a personA that is present but malformed', () => {
+    expect(isValidFrozenState({ ...state, personA: { age: 36 } })).toBe(false)
   })
 })
 

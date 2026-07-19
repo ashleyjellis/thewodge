@@ -50,6 +50,38 @@ export type FrozenForecastState = {
   joint: PotTotals
 }
 
+function isValidPotTotals(value: unknown): value is PotTotals {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.age === 'number' &&
+    typeof v.pension === 'number' &&
+    typeof v.stocks === 'number' &&
+    typeof v.cash === 'number' &&
+    typeof v.monthly === 'number' &&
+    typeof v.pensionMonthly === 'number'
+  )
+}
+
+/**
+ * Runtime shape check for a parsed forecast_snapshots.household_state_json.
+ * Guards against a baseline stored under an earlier version of this shape
+ * (e.g. a flat {age,pension,stocks,...} row from before the owner-filter
+ * split) being silently misread — callers should treat an invalid state as
+ * equivalent to "no baseline yet," never destructure it directly.
+ */
+export function isValidFrozenState(value: unknown): value is FrozenForecastState {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  if (typeof v.targetAge !== 'number' || typeof v.investedRate !== 'number' || typeof v.cashRate !== 'number')
+    return false
+  if (!isValidPotTotals(v.total)) return false
+  if (v.personA !== null && !isValidPotTotals(v.personA)) return false
+  if (v.personB !== null && !isValidPotTotals(v.personB)) return false
+  if (!isValidPotTotals(v.joint)) return false
+  return true
+}
+
 /** Picks one owner's slice and maps it onto the forecast engine's input shape. */
 export function ownerStateToForecastInput(
   state: FrozenForecastState,

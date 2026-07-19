@@ -116,8 +116,19 @@ function Forecast() {
   ]
 
   const currentState: FrozenForecastState = JSON.parse(current.householdStateJson)
-  const { input, assumptions } =
-    ownerStateToForecastInput(currentState, owner) ?? ownerStateToForecastInput(currentState, 'total')!
+  const resolvedCurrent =
+    ownerStateToForecastInput(currentState, owner) ?? ownerStateToForecastInput(currentState, 'total')
+  if (!resolvedCurrent) {
+    return (
+      <div className="space-y-10">
+        {header}
+        <p className="text-[14px] text-muted-foreground">
+          Your plan needs to be recreated — reload this page to fix it automatically.
+        </p>
+      </div>
+    )
+  }
+  const { input, assumptions } = resolvedCurrent
   const result = forecast(input, assumptions)
 
   const hasReplanned = current.id !== original.id
