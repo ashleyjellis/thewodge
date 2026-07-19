@@ -231,9 +231,15 @@ export type ActualSnapshotLike = {
  * Real money added and market growth for one pot, during ONE specific
  * calendar year (not cumulative) — null when no update was recorded that
  * year (nothing to report, not a confident zero — no forced cadence means a
- * skipped year is normal, spec §3), or when a recorded update that year is
- * missing money_in/transfer_out (spec §4 step 7's guard against a
- * confidently wrong number).
+ * skipped year is normal, spec §3), or when NONE of that year's updates have
+ * usable money_in/transfer_out figures.
+ *
+ * A year with several updates, some complete and some not, still reports the
+ * sum of the complete ones — spec §4 step 7 guards against a confidently
+ * wrong number for one incomplete *snapshot*, not against ever reporting a
+ * partial total for a year that has other, complete snapshots. This mirrors
+ * totalGrowth()'s tolerance on the Growth tab (sum what's known, skip what
+ * isn't) — the two tabs must agree on the same underlying data.
  */
 function actualPotYearMetrics(
   accounts: { id: string; potCategory: PotCategory }[],
@@ -247,16 +253,20 @@ function actualPotYearMetrics(
 
   let additions = 0
   let growth = 0
-  let additionsKnown = true
-  let growthKnown = true
+  let hasKnownAdditions = false
+  let hasKnownGrowth = false
   for (const s of yearSnapshots) {
-    if (s.moneyIn === null) additionsKnown = false
-    else additions += s.moneyIn
+    if (s.moneyIn !== null) {
+      additions += s.moneyIn
+      hasKnownAdditions = true
+    }
     const g = periodGrowth(s)
-    if (g.growth === null) growthKnown = false
-    else growth += g.growth
+    if (g.growth !== null) {
+      growth += g.growth
+      hasKnownGrowth = true
+    }
   }
-  return { additions: additionsKnown ? additions : null, growth: growthKnown ? growth : null }
+  return { additions: hasKnownAdditions ? additions : null, growth: hasKnownGrowth ? growth : null }
 }
 
 export type ForecastYearRow = {

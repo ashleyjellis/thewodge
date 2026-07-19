@@ -335,6 +335,48 @@ describe('buildForecastYearRows', () => {
     expect(row.actualGrowth).toBe(400) // 20900-20000-500+0
   })
 
+  it('a year with a mix of complete and incomplete updates still sums the complete ones, matching the Growth tab', () => {
+    const rows = buildForecastYearRows({
+      planYearly: plan,
+      planCreatedAt: '2026-01-01T00:00:00.000Z',
+      originalYearly: null,
+      originalCreatedAt: null,
+      hasReplanned: false,
+      accounts: [
+        { id: 'pension-acc', potCategory: 'pension' },
+        { id: 'cash-acc', potCategory: 'cash' },
+      ],
+      snapshots: [
+        {
+          accountId: 'pension-acc',
+          year: 2026,
+          recordedAt: '2026-03-01T00:00:00.000Z',
+          startBalance: 20_000,
+          endBalance: 20_900,
+          moneyIn: 500,
+          transferOut: 0,
+        },
+        // a data-import edge case with no money_in/transfer_out recorded —
+        // its own growth is unknowable, but it must not zero out the whole
+        // year's total the way it used to
+        {
+          accountId: 'cash-acc',
+          year: 2026,
+          recordedAt: '2026-06-01T00:00:00.000Z',
+          startBalance: 1_000,
+          endBalance: 1_300,
+          moneyIn: null,
+          transferOut: null,
+        },
+      ],
+      currentCalendarYear: 2026,
+      pot: 'total',
+    })
+    const row = rows.find((r) => r.calendarYear === 2026)!
+    expect(row.actualAdditions).toBe(500) // the cash-acc's unknown money_in is skipped, not null-propagated
+    expect(row.actualGrowth).toBe(400) // 20900-20000-500+0, the cash-acc's unknown growth is skipped
+  })
+
   it('a year with no recorded update shows actualGrowth/actualAdditions as null, not zero', () => {
     const rows = buildForecastYearRows({
       planYearly: plan,
