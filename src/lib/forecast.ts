@@ -19,7 +19,7 @@ import {
   DEFAULT_PERSONAL_PENSION_PCT,
   INVESTED_RATE,
   TARGET_AGE,
-} from '@/config'
+} from '../config.js'
 
 export type ForecastInput = {
   age: number

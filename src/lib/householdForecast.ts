@@ -9,8 +9,8 @@
  * estimated from income the way the free tool has to, since real data exists
  * here.
  */
-import type { Assumptions, ForecastInput, YearPoint } from './forecast'
-import { latestSnapshotByAccount } from './snapshotMath'
+import type { Assumptions, ForecastInput, YearPoint } from './forecast.js'
+import { latestSnapshotByAccount } from './snapshotMath.js'
 
 export type PotCategory = 'pension' | 'investments' | 'cash'
 

@@ -5,8 +5,8 @@
  * Forecast visit — a later phase), never silently on account/people changes.
  */
 import { eq } from 'drizzle-orm'
-import type { Db } from './client'
-import { forecastSnapshots, type ForecastSnapshotType } from './schema'
+import type { Db } from './client.js'
+import { forecastSnapshots, type ForecastSnapshotType } from './schema.js'
 
 export type ForecastSnapshot = typeof forecastSnapshots.$inferSelect
 
