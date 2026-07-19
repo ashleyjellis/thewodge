@@ -65,8 +65,8 @@ describe('forecast API', () => {
     expect(data.current.type).toBe('baseline')
     expect(data.original.type).toBe('baseline')
     const state = JSON.parse(data.current.householdStateJson)
-    expect(state.pension).toBe(20_000)
-    expect(state.pensionMonthly).toBe(500)
+    expect(state.total.pension).toBe(20_000)
+    expect(state.total.pensionMonthly).toBe(500)
   })
 
   it('GET a second time reuses the same baseline rather than creating another', async () => {

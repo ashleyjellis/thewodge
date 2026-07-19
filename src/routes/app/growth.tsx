@@ -15,11 +15,11 @@ import { useSnapshots } from '@/state/useSnapshots'
 import type { AccountOwner } from '@/lib/accountOwner'
 import { hasBeenUpdated, rollupSnapshotsByYear, totalGrowth } from '@/lib/snapshotMath'
 import { money, monthYear } from '@/lib/format'
-import { cn } from '@/lib/cn'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { UpdateBalances } from '@/components/app/UpdateBalances'
 import { AccountHistoryCard, type HistoryPeriod } from '@/components/app/AccountHistoryCard'
 import { GrowthDiary } from '@/components/app/GrowthDiary'
+import { FilterPill } from '@/components/app/FilterPill'
 
 const growthSeo = seo({
   title: `Growth — ${SITE_NAME}`,
@@ -42,29 +42,6 @@ const POT_LABELS: Record<'pension' | 'investments' | 'cash', string> = {
 }
 const POT_FILTERS = ['all', 'pension', 'investments', 'cash'] as const
 type PotFilter = (typeof POT_FILTERS)[number]
-
-function FilterPill({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors',
-        active ? 'bg-foreground text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
 
 function Growth() {
   const {

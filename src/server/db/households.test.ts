@@ -18,7 +18,7 @@ describe('households', () => {
 
   it('creates a household with the documented defaults', async () => {
     const h = await createHousehold(db)
-    expect(h.retirementAge).toBe(58)
+    expect(h.retirementAge).toBe(60) // matches the free tool's TARGET_AGE (src/config.ts)
     expect(h.realReturn).toBe(0.07)
     expect(h.cashReturn).toBe(0.045)
     expect(h.swr).toBe(0.04)

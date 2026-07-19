@@ -15,14 +15,17 @@ import { postJson } from '@/lib/apiClient'
 import { forecast, projectYearly, type YearPoint } from '@/lib/forecast'
 import {
   buildForecastYearRows,
-  frozenStateToForecastInput,
+  ownerStateToForecastInput,
   type FrozenForecastState,
+  type OwnerFilter,
+  type PotFilter,
 } from '@/lib/householdForecast'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { ForecastYearTable } from '@/components/app/ForecastYearTable'
 import { AppField } from '@/components/app/AppField'
+import { FilterPill } from '@/components/app/FilterPill'
 import { NavLink } from '@/components/NavLink'
 
 const forecastSeo = seo({
@@ -40,7 +43,7 @@ export const Route = createFileRoute('/app/forecast')({
 })
 
 function Forecast() {
-  const { household, loading: householdLoading, error: householdError } = useHousehold()
+  const { household, people, loading: householdLoading, error: householdError } = useHousehold()
   const { accounts, loading: accountsLoading } = useAccounts(household?.id ?? null)
   const { snapshots, loading: snapshotsLoading } = useSnapshots(household?.id ?? null)
   const {
@@ -52,6 +55,8 @@ function Forecast() {
     refetch,
   } = useForecast(household?.id ?? null)
 
+  const [owner, setOwner] = useState<OwnerFilter>('total')
+  const [pot, setPot] = useState<PotFilter>('total')
   const [replanning, setReplanning] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -103,18 +108,30 @@ function Forecast() {
     )
   }
 
+  const ownerOptions: { value: OwnerFilter; label: string }[] = [
+    { value: 'total', label: 'Total household' },
+    ...(people[0] ? [{ value: 'person_a' as const, label: people[0].name }] : []),
+    ...(people[1] ? [{ value: 'person_b' as const, label: people[1].name }] : []),
+    { value: 'joint', label: 'Joint' },
+  ]
+
   const currentState: FrozenForecastState = JSON.parse(current.householdStateJson)
-  const { input, assumptions } = frozenStateToForecastInput(currentState)
+  const { input, assumptions } =
+    ownerStateToForecastInput(currentState, owner) ?? ownerStateToForecastInput(currentState, 'total')!
   const result = forecast(input, assumptions)
 
   const hasReplanned = current.id !== original.id
   let originalYearly: YearPoint[] | null = null
   if (hasReplanned) {
     const originalState: FrozenForecastState = JSON.parse(original.householdStateJson)
-    const { input: oInput, assumptions: oAssumptions } = frozenStateToForecastInput(originalState)
-    originalYearly = projectYearly(oInput, oAssumptions)
+    const originalResolved =
+      ownerStateToForecastInput(originalState, owner) ?? ownerStateToForecastInput(originalState, 'total')
+    if (originalResolved) {
+      originalYearly = projectYearly(originalResolved.input, originalResolved.assumptions)
+    }
   }
 
+  const ownerAccounts = owner === 'total' ? accounts : accounts.filter((a) => a.owner === owner)
   const currentCalendarYear = new Date().getUTCFullYear()
   const rows = buildForecastYearRows({
     planYearly: result.yearly,
@@ -122,9 +139,10 @@ function Forecast() {
     originalYearly,
     originalCreatedAt: hasReplanned ? original.createdAt : null,
     hasReplanned,
-    accounts,
+    accounts: ownerAccounts,
     snapshots,
     currentCalendarYear,
+    pot,
   })
   const crossoverCalendarYear =
     result.crossoverYear !== null
@@ -132,6 +150,11 @@ function Forecast() {
       : null
 
   const years = Math.max(0, result.targetAge - input.age)
+  // live, not the frozen plan-of-record — "today" should always reflect what
+  // you actually hold right now, even though the projection itself stays
+  // anchored to the frozen plan (spec §4: "it does not recompute from live
+  // account data")
+  const liveTotal = ownerAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0)
 
   const submitReplan = async () => {
     setSaving(true)
@@ -152,10 +175,18 @@ function Forecast() {
     <div className="space-y-10">
       {header}
 
+      <div className="flex flex-wrap gap-1">
+        {ownerOptions.map((opt) => (
+          <FilterPill key={opt.value} active={owner === opt.value} onClick={() => setOwner(opt.value)}>
+            {opt.label}
+          </FilterPill>
+        ))}
+      </div>
+
       <div className="rounded-3xl bg-card p-7 shadow-soft sm:p-10">
         <p className="text-[13px] text-muted-foreground">
           Today you hold{' '}
-          <span className="font-semibold tabular-nums text-foreground">{money(result.todayTotal)}</span>.
+          <span className="font-semibold tabular-nums text-foreground">{money(liveTotal)}</span>.
         </p>
         <p className="mt-4 text-[17px] leading-snug text-muted-foreground sm:text-[19px]">
           {hasReplanned ? 'Your revised plan says by' : 'Your plan says by'} {result.targetAge} you’ll
@@ -239,7 +270,12 @@ function Forecast() {
         </table>
       </div>
 
-      <ForecastYearTable rows={rows} crossoverCalendarYear={crossoverCalendarYear} />
+      <ForecastYearTable
+        rows={rows}
+        crossoverCalendarYear={crossoverCalendarYear}
+        pot={pot}
+        onPotChange={setPot}
+      />
 
       <div className="rounded-3xl bg-card p-7 shadow-soft">
         <HowWeWorkedThisOut>

@@ -1,42 +1,93 @@
 /**
- * The Forecast tab's year-by-year table (spec §4) — plan against what's
- * actually happened, with the original baseline shown as a faded secondary
- * column once a replan exists ("the fork must stay visible, never
- * disappear"). Reproduces the free tool's YearlyTable style. Variance never
- * says "behind" — see varianceLabel().
+ * The Forecast tab's year-by-year table (spec §4) — value, growth and
+ * additions, forecast alongside actual, filterable by pot. The original
+ * baseline's value shows as a faded secondary column once a replan exists
+ * ("the fork must stay visible, never disappear"). Variance never says
+ * "behind" — see varianceLabel().
  */
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
-import { varianceLabel, type ForecastYearRow } from '@/lib/householdForecast'
+import { varianceLabel, type ForecastYearRow, type PotFilter } from '@/lib/householdForecast'
+import { FilterPill } from './FilterPill'
+
+const POT_FILTERS: { value: PotFilter; label: string }[] = [
+  { value: 'total', label: 'Total' },
+  { value: 'cash', label: 'Savings' },
+  { value: 'investments', label: 'Investments' },
+  { value: 'pension', label: 'Pension' },
+]
+
+function cell(value: number | null, className?: string) {
+  return (
+    <td className={cn('py-2.5 pr-3 text-right', className)}>{value !== null ? money(value) : '—'}</td>
+  )
+}
 
 export function ForecastYearTable({
   rows,
   crossoverCalendarYear,
+  pot,
+  onPotChange,
 }: {
   rows: ForecastYearRow[]
   crossoverCalendarYear: number | null
+  pot: PotFilter
+  onPotChange: (pot: PotFilter) => void
 }) {
-  const hasOriginal = rows.some((r) => r.originalTotal !== null)
+  const hasOriginal = rows.some((r) => r.originalValue !== null)
   const lastAge = rows[rows.length - 1]?.age
 
   return (
     <div className="rounded-3xl bg-card p-7 shadow-soft">
-      <h2 className="text-[15px] font-semibold tracking-tight">Year by year</h2>
-      <p className="mt-2 max-w-lg text-[13px] text-muted-foreground">
-        Your plan against what's actually happened, every year to {lastAge}.
-      </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-semibold tracking-tight">Year by year</h2>
+          <p className="mt-2 max-w-lg text-[13px] text-muted-foreground">
+            Value, growth and what you put in — plan against what's actually happened, every
+            year to {lastAge}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {POT_FILTERS.map((p) => (
+            <FilterPill key={p.value} active={pot === p.value} onClick={() => onPotChange(p.value)}>
+              {p.label}
+            </FilterPill>
+          ))}
+        </div>
+      </div>
 
-      <div className="mt-5 max-h-[420px] overflow-y-auto overflow-x-auto rounded-2xl">
-        <table className="w-full min-w-[640px] text-[13px] tabular-nums">
+      <div className="mt-5 max-h-[480px] overflow-y-auto overflow-x-auto rounded-2xl">
+        <table className="w-full min-w-[860px] text-[13px] tabular-nums">
           <thead className="sticky top-0 z-10 bg-card text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             <tr>
-              <th className="py-2 pr-3 font-medium">Age</th>
+              <th rowSpan={2} className="py-2 pr-3 align-bottom font-medium">
+                Age
+              </th>
               {hasOriginal ? (
-                <th className="py-2 pr-3 text-right font-medium">Original plan</th>
+                <th rowSpan={2} className="py-2 pr-3 text-right align-bottom font-medium">
+                  Original
+                </th>
               ) : null}
-              <th className="py-2 pr-3 text-right font-medium">Plan</th>
-              <th className="py-2 pr-3 text-right font-medium">Actual</th>
-              <th className="py-2 text-right font-medium">Variance</th>
+              <th colSpan={2} className="py-2 pr-3 text-right font-medium">
+                Value
+              </th>
+              <th colSpan={2} className="py-2 pr-3 text-right font-medium">
+                Growth
+              </th>
+              <th colSpan={2} className="py-2 pr-3 text-right font-medium">
+                Additions
+              </th>
+              <th rowSpan={2} className="py-2 text-right align-bottom font-medium">
+                Variance
+              </th>
+            </tr>
+            <tr className="text-[10px]">
+              <th className="pb-2 pr-3 text-right font-medium">Forecast</th>
+              <th className="pb-2 pr-3 text-right font-medium">Actual</th>
+              <th className="pb-2 pr-3 text-right font-medium">Forecast</th>
+              <th className="pb-2 pr-3 text-right font-medium">Actual</th>
+              <th className="pb-2 pr-3 text-right font-medium">Forecast</th>
+              <th className="pb-2 pr-3 text-right font-medium">Actual</th>
             </tr>
           </thead>
           <tbody>
@@ -55,20 +106,16 @@ export function ForecastYearTable({
                       </span>
                     ) : null}
                   </td>
-                  {hasOriginal ? (
-                    <td className="py-2.5 pr-3 text-right text-muted-foreground/50">
-                      {row.originalTotal !== null ? money(row.originalTotal) : '—'}
-                    </td>
-                  ) : null}
-                  <td className="py-2.5 pr-3 text-right font-semibold text-foreground">
-                    {money(row.planTotal)}
-                  </td>
-                  <td className="py-2.5 pr-3 text-right text-muted-foreground">
-                    {row.actualTotal !== null ? money(row.actualTotal) : '—'}
-                  </td>
+                  {hasOriginal ? cell(row.originalValue, 'text-muted-foreground/50') : null}
+                  {cell(row.forecastValue, 'font-semibold text-foreground')}
+                  {cell(row.actualValue, 'text-muted-foreground')}
+                  {cell(row.forecastGrowth, 'text-muted-foreground')}
+                  {cell(row.actualGrowth, 'text-muted-foreground')}
+                  {cell(row.forecastAdditions, 'text-muted-foreground')}
+                  {cell(row.actualAdditions, 'text-muted-foreground')}
                   <td className="py-2.5 text-right text-muted-foreground">
-                    {row.actualTotal !== null
-                      ? `${money(row.actualTotal - row.planTotal)} · ${varianceLabel(row.actualTotal, row.planTotal)}`
+                    {row.actualValue !== null
+                      ? `${money(row.actualValue - row.forecastValue)} · ${varianceLabel(row.actualValue, row.forecastValue)}`
                       : '—'}
                   </td>
                 </tr>

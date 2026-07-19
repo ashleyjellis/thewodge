@@ -30,7 +30,7 @@ import { check, index, integer, real, sqliteTable, text } from 'drizzle-orm/sqli
 export const households = sqliteTable('households', {
   id: text('id').primaryKey(),
   createdAt: text('created_at').notNull(),
-  retirementAge: integer('retirement_age').notNull().default(58),
+  retirementAge: integer('retirement_age').notNull().default(60),
   /** annual, today's money — nullable until the household sets a target */
   targetIncomeToday: real('target_income_today'),
   realReturn: real('real_return').notNull().default(0.07),

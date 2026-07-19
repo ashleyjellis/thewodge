@@ -10,12 +10,14 @@ import { useState } from 'react'
 import { estimateContribution, latestSnapshotByAccount, monthsBetween } from '@/lib/snapshotMath'
 import { money, monthYear } from '@/lib/format'
 import { postJson } from '@/lib/apiClient'
+import { ACCOUNT_TYPE_LABELS, type AccountType } from '@/lib/accountType'
 import { dotClass } from '@/components/viz'
 import { AppField } from './AppField'
 
 type UpdateableAccount = {
   id: string
   provider: string
+  accountType: AccountType
   potCategory: 'pension' | 'investments' | 'cash'
   monthlyContribution: number
   currentBalance: number | null
@@ -149,7 +151,12 @@ export function UpdateBalances({
                   className={`h-2.5 w-2.5 shrink-0 translate-y-[3px] rounded-full ${dotClass[POT_TONE[account.potCategory]]}`}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium text-foreground">{account.provider}</p>
+                  <p className="text-[14px] font-medium text-foreground">
+                    {account.provider}
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      · {ACCOUNT_TYPE_LABELS[account.accountType]}
+                    </span>
+                  </p>
                   <p className="text-[12px] text-muted-foreground">
                     {last
                       ? `Last updated ${monthYear(last.year, last.month)} — ${money(account.currentBalance ?? 0)}`

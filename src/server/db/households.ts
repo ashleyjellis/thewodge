@@ -23,7 +23,9 @@ export async function createHousehold(db: Db, input: HouseholdPatch = {}): Promi
   const row: Household = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    retirementAge: input.retirementAge ?? 58,
+    // matches the free tool's TARGET_AGE (src/config.ts) — not re-imported
+    // here since that file is client-only (uses import.meta.env)
+    retirementAge: input.retirementAge ?? 60,
     targetIncomeToday: input.targetIncomeToday ?? null,
     realReturn: input.realReturn ?? 0.07,
     cashReturn: input.cashReturn ?? 0.045,

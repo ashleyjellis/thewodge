@@ -4,17 +4,9 @@
  * type, balance + monthly contribution. Clickable to edit.
  */
 import { money } from '@/lib/format'
+import { ACCOUNT_TYPE_LABELS } from '@/lib/accountType'
 import { dotClass } from '@/components/viz'
 import type { Account } from '@/state/useAccounts'
-
-const TYPE_LABELS: Record<Account['accountType'], string> = {
-  cash_isa: 'Cash ISA',
-  stocks_isa: 'Stocks & shares ISA',
-  pension: 'Pension',
-  lisa: 'LISA',
-  savings_account: 'Savings account',
-  other: 'Other',
-}
 
 const POT_TONE = {
   pension: 'you',
@@ -43,7 +35,7 @@ export function AccountRow({ account, onClick }: { account: Account; onClick: ()
             {account.provider}
           </span>
           <span className="block text-[12px] text-muted-foreground">
-            {TYPE_LABELS[account.accountType]}
+            {ACCOUNT_TYPE_LABELS[account.accountType]}
             {flags.length > 0 ? ` · ${flags.join(', ')}` : ''}
           </span>
         </span>

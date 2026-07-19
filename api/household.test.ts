@@ -19,7 +19,7 @@ describe('GET /api/household', () => {
     expect(status()).toBe(200)
     const b = body() as { ok: boolean; household: { retirementAge: number }; people: unknown[] }
     expect(b.ok).toBe(true)
-    expect(b.household.retirementAge).toBe(58)
+    expect(b.household.retirementAge).toBe(60) // matches the free tool's TARGET_AGE (src/config.ts)
     expect(b.people).toEqual([])
   })
 
