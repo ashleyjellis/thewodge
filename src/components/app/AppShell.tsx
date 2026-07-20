@@ -1,8 +1,8 @@
 /**
  * The authenticated area's own chrome — distinct from the marketing site's
- * SiteHeader/SiteFooter. A slim tab bar (Accounts / Growth / Forecast), Insights
- * reserved but not built (spec §1 — greyed, not wired up). No footer; this is a
- * working tool, not a content page.
+ * SiteHeader/SiteFooter. A slim tab bar (Dashboard / Accounts / Growth /
+ * Forecast), Insights reserved but not built (spec §1 — greyed, not wired
+ * up). No footer; this is a working tool, not a content page.
  */
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -12,6 +12,7 @@ import { NavLink } from '@/components/NavLink'
 import { MaxWidthContainer } from '@/components/site/Container'
 
 const TABS = [
+  { to: '/app/dashboard', label: 'Dashboard' },
   { to: '/app/accounts', label: 'Accounts' },
   { to: '/app/growth', label: 'Growth' },
   { to: '/app/forecast', label: 'Forecast' },
