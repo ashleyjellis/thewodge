@@ -19,6 +19,22 @@ describe('people', () => {
     expect(p.householdId).toBe(h.id)
     expect(p.name).toBe('Sam')
     expect(p.salary).toBeNull()
+    expect(p.retirementAge).toBe(60)
+    expect(p.salaryGrowthPct).toBeNull()
+  })
+
+  it('accepts a per-person retirement age and salary growth rate', async () => {
+    const h = await createHousehold(db)
+    const p = await createPerson(db, {
+      householdId: h.id,
+      name: 'Ashley',
+      age: 31,
+      retirementAge: 56,
+      salary: 93_500,
+      salaryGrowthPct: 0.02,
+    })
+    expect(p.retirementAge).toBe(56)
+    expect(p.salaryGrowthPct).toBe(0.02)
   })
 
   it('accepts salary, bonus and employer pension percentages', async () => {
@@ -64,5 +80,13 @@ describe('people', () => {
     const reloaded = await getPerson(db, p.id)
     expect(reloaded!.age).toBe(37)
     expect(reloaded!.salary).toBe(80_000) // untouched
+  })
+
+  it('updates retirement age independently of salary', async () => {
+    const h = await createHousehold(db)
+    const p = await createPerson(db, { householdId: h.id, name: 'Sam', age: 36, retirementAge: 60 })
+    await updatePerson(db, p.id, { retirementAge: 55 })
+    const reloaded = await getPerson(db, p.id)
+    expect(reloaded!.retirementAge).toBe(55)
   })
 })

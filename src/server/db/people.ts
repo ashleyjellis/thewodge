@@ -20,7 +20,9 @@ export type NewPerson = {
   householdId: string
   name: string
   age: number
+  retirementAge?: number
   salary?: number | null
+  salaryGrowthPct?: number | null
   bonus?: number | null
   employerPensionUserPct?: number | null
   employerPensionMatchPct?: number | null
@@ -40,7 +42,9 @@ export async function createPerson(db: Db, input: NewPerson): Promise<Person> {
     householdId: input.householdId,
     name: input.name,
     age: input.age,
+    retirementAge: input.retirementAge ?? 60,
     salary: input.salary ?? null,
+    salaryGrowthPct: input.salaryGrowthPct ?? null,
     bonus: input.bonus ?? null,
     employerPensionUserPct: input.employerPensionUserPct ?? null,
     employerPensionMatchPct: input.employerPensionMatchPct ?? null,

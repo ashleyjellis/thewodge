@@ -51,13 +51,45 @@ export const people = sqliteTable(
       .references(() => households.id),
     name: text('name').notNull(),
     age: integer('age').notNull(),
+    /** this person's own planned retirement age — replaces the old
+     *  household-wide retirementAge as the driver of their forecast
+     *  horizon; a joint/total view runs to the later of the two people's
+     *  own ages (see resolveOwnerAge in scheduledPlan.ts) */
+    retirementAge: integer('retirement_age').notNull().default(60),
     salary: real('salary'),
+    /** fractional annual growth assumed for salary (0.02 = 2%) — the
+     *  baseline projection; actuals logged in salary_changes supersede it
+     *  for the year they land and rebase everything after (see
+     *  resolveSalarySchedule in salary.ts) */
+    salaryGrowthPct: real('salary_growth_pct'),
     bonus: real('bonus'),
     employerPensionUserPct: real('employer_pension_user_pct'),
     employerPensionMatchPct: real('employer_pension_match_pct'),
     employerPensionAdditionalPct: real('employer_pension_additional_pct'),
   },
   (t) => [index('people_household_id_idx').on(t.householdId)],
+)
+
+// ── salary_changes ────────────────────────────────────────────────────────
+// An actual salary confirmed for a given year — logged over time, the same
+// actuals-vs-assumption relationship account_snapshots has with a flat
+// growth rate. Append-only, same reasoning as account_snapshots: this is a
+// historical record of what a salary actually was, not a live editable
+// assumption (see salary.ts).
+
+export const salaryChanges = sqliteTable(
+  'salary_changes',
+  {
+    id: text('id').primaryKey(),
+    personId: text('person_id')
+      .notNull()
+      .references(() => people.id),
+    effectiveYear: integer('effective_year').notNull(),
+    salary: real('salary').notNull(),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [index('salary_changes_person_id_idx').on(t.personId)],
 )
 
 // ── accounts ──────────────────────────────────────────────────────────────
