@@ -1,8 +1,8 @@
 /**
  * The authenticated area's own chrome — distinct from the marketing site's
  * SiteHeader/SiteFooter. A slim tab bar (Dashboard / Accounts / Growth /
- * Forecast), Insights reserved but not built (spec §1 — greyed, not wired
- * up). No footer; this is a working tool, not a content page.
+ * Forecast / Insights). No footer; this is a working tool, not a content
+ * page.
  */
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -16,6 +16,7 @@ const TABS = [
   { to: '/app/accounts', label: 'Accounts' },
   { to: '/app/growth', label: 'Growth' },
   { to: '/app/forecast', label: 'Forecast' },
+  { to: '/app/insights', label: 'Insights' },
 ]
 
 /** Every product hook on the free tool links here with ?from=<hookId> (spec:
@@ -63,13 +64,6 @@ export function AppShell({
                   {tab.label}
                 </NavLink>
               ))}
-              <span
-                className="shrink-0 cursor-default rounded-full px-3 py-2 text-[14px] font-medium text-muted-foreground/40 sm:px-4"
-                aria-disabled="true"
-                title="Coming later"
-              >
-                Insights
-              </span>
             </nav>
           </div>
         </MaxWidthContainer>

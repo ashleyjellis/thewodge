@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  accountGrowthVsAssumed,
   estimateContribution,
   hasBeenUpdated,
   latestSnapshotByAccount,
@@ -132,6 +133,92 @@ describe('totalGrowth', () => {
   it('hasAny is false for no snapshots', () => {
     expect(totalGrowth([]).hasAny).toBe(false)
     expect(totalGrowth([]).total).toBe(0)
+  })
+})
+
+describe('accountGrowthVsAssumed', () => {
+  const snap = (over: Partial<SnapshotLike>): SnapshotLike => ({
+    year: 2025,
+    month: 1,
+    startBalance: 0,
+    endBalance: 0,
+    moneyIn: 0,
+    transferOut: 0,
+    isEstimated: false,
+    ...over,
+  })
+
+  it('null with no snapshots', () => {
+    expect(accountGrowthVsAssumed([], 0.07)).toBeNull()
+  })
+
+  it('a single opening snapshot contributes no assumed growth (0 months elapsed)', () => {
+    const result = accountGrowthVsAssumed(
+      [snap({ year: 2025, month: 1, startBalance: 10_000, endBalance: 10_000, moneyIn: 0, transferOut: 0 })],
+      0.07,
+    )
+    expect(result).toEqual({ actualGrowth: 0, assumedGrowth: 0 })
+  })
+
+  it('grew faster than assumed — a positive variance', () => {
+    // 10,000 held for exactly a year at an assumed 7%/yr would grow ~700;
+    // this account actually grew 1,000
+    const result = accountGrowthVsAssumed(
+      [
+        snap({ year: 2025, month: 1, startBalance: 10_000, endBalance: 10_000 }),
+        snap({ year: 2026, month: 1, startBalance: 10_000, endBalance: 11_000, moneyIn: 0, transferOut: 0 }),
+      ],
+      0.07,
+    )
+    expect(result!.actualGrowth).toBe(1_000)
+    expect(result!.assumedGrowth).toBeCloseTo(700, 5)
+    expect(result!.actualGrowth).toBeGreaterThan(result!.assumedGrowth)
+  })
+
+  it('grew slower than assumed — a negative variance', () => {
+    const result = accountGrowthVsAssumed(
+      [
+        snap({ year: 2025, month: 1, startBalance: 10_000, endBalance: 10_000 }),
+        snap({ year: 2026, month: 1, startBalance: 10_000, endBalance: 10_200, moneyIn: 0, transferOut: 0 }),
+      ],
+      0.07,
+    )
+    expect(result!.actualGrowth).toBe(200)
+    expect(result!.assumedGrowth).toBeCloseTo(700, 5)
+    expect(result!.actualGrowth).toBeLessThan(result!.assumedGrowth)
+  })
+
+  it('excludes a period with missing money_in/transfer_out from the totals, same as periodGrowth', () => {
+    const result = accountGrowthVsAssumed(
+      [
+        snap({ year: 2025, month: 1, startBalance: 10_000, endBalance: 10_000 }), // valid, but zero — 0 months elapsed
+        snap({ year: 2026, month: 1, startBalance: 10_000, endBalance: 20_000, moneyIn: null, transferOut: 0 }), // unusable
+      ],
+      0.07,
+    )
+    // the huge unexplained jump in the second period is never silently
+    // folded in — only the opening period's (zero) figures count
+    expect(result).toEqual({ actualGrowth: 0, assumedGrowth: 0 })
+  })
+
+  it('null when every period is unusable', () => {
+    const result = accountGrowthVsAssumed(
+      [snap({ year: 2025, month: 1, startBalance: 10_000, endBalance: 20_000, moneyIn: null, transferOut: 0 })],
+      0.07,
+    )
+    expect(result).toBeNull()
+  })
+
+  it('pro-rates assumed growth by months elapsed, not a flat annual figure', () => {
+    // 6 months, not 12 — assumed growth should be roughly half of a full year's
+    const result = accountGrowthVsAssumed(
+      [
+        snap({ year: 2025, month: 1, startBalance: 10_000, endBalance: 10_000 }),
+        snap({ year: 2025, month: 7, startBalance: 10_000, endBalance: 10_300, moneyIn: 0, transferOut: 0 }),
+      ],
+      0.07,
+    )
+    expect(result!.assumedGrowth).toBeCloseTo(350, 5) // 10,000 * 0.07 * (6/12)
   })
 })
 

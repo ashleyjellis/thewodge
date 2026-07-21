@@ -86,6 +86,42 @@ export function totalGrowth(snapshots: SnapshotLike[]): GrowthTotal {
   return { total, missingCount, hasAny: snapshots.length > 0 }
 }
 
+export type GrowthVsAssumed = {
+  actualGrowth: number
+  /** what the same periods would have grown by at the pot's assumed rate,
+   *  pro-rated by months elapsed (simple, non-compounding — directionally
+   *  right without needing this household's exact contribution timing) */
+  assumedGrowth: number
+}
+
+/**
+ * One account's cumulative actual growth against what its pot's assumed
+ * rate would have produced over the same periods — the per-account variance
+ * an Insights-style narrative needs ("HL grew faster than its 7%
+ * assumption"), as opposed to totalGrowth()'s single aggregate figure.
+ * Snapshots must be chronological. Null when there's nothing to compare
+ * (no snapshots, or every period's growth is unavailable).
+ */
+export function accountGrowthVsAssumed(
+  snapshots: SnapshotLike[],
+  assumedRate: number,
+): GrowthVsAssumed | null {
+  let actualGrowth = 0
+  let assumedGrowth = 0
+  let hasAny = false
+  for (let i = 0; i < snapshots.length; i++) {
+    const s = snapshots[i]!
+    const g = periodGrowth(s)
+    if (g.growth === null) continue
+    const prev = snapshots[i - 1]
+    const monthsElapsed = prev ? monthsBetween({ year: prev.year, month: prev.month }, { year: s.year, month: s.month }) : 0
+    actualGrowth += g.growth
+    assumedGrowth += s.startBalance * assumedRate * (Math.max(0, monthsElapsed) / 12)
+    hasAny = true
+  }
+  return hasAny ? { actualGrowth, assumedGrowth } : null
+}
+
 /**
  * Whether tracking has genuinely begun: at least one account has been through
  * a real update beyond its opening entry. An account with only its opening

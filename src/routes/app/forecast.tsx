@@ -177,11 +177,6 @@ function Forecast() {
     currentCalendarYear,
     pot,
   })
-  const crossoverCalendarYear =
-    result.crossoverYear !== null
-      ? new Date(current.createdAt).getUTCFullYear() + result.crossoverYear
-      : null
-
   // the live Plan table — always reflects the current schedule immediately,
   // unlike everything above which reads from the frozen baseline
   const planDefaultOwner = owner === 'total' ? (people[0] ? 'person_a' : 'joint') : owner
@@ -194,13 +189,6 @@ function Forecast() {
     changes: contributionChanges,
     events: plannedEvents,
   })
-
-  const years = Math.max(0, result.targetAge - input.age)
-  // live, not the frozen plan-of-record — "today" should always reflect what
-  // you actually hold right now, even though the projection itself stays
-  // anchored to the frozen plan (spec §4: "it does not recompute from live
-  // account data")
-  const liveTotal = ownerAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0)
 
   const potScenarios = buildPotScenarios(input, assumptions, scenariosPot)
   const scenariosPotLabel =
@@ -233,25 +221,6 @@ function Forecast() {
         ))}
       </div>
 
-      <div className="rounded-3xl bg-card p-7 shadow-soft sm:p-10">
-        <p className="text-[13px] text-muted-foreground">
-          Today you hold{' '}
-          <span className="font-semibold tabular-nums text-foreground">{money(liveTotal)}</span>.
-        </p>
-        <p className="mt-4 text-[17px] leading-snug text-muted-foreground sm:text-[19px]">
-          {hasReplanned ? 'Your revised plan says by' : 'Your plan says by'} {result.targetAge} you’ll
-          have
-        </p>
-        <div className="mt-2 text-[52px] font-semibold leading-none tracking-tight tabular-nums sm:text-[68px]">
-          {money(result.projectedTotal)}
-        </div>
-        <p className="mt-4 text-[13px] text-muted-foreground">
-          {years > 0
-            ? `That’s ${years} ${years === 1 ? 'year' : 'years'} of your pension, investments and cash carried forward together.`
-            : 'That’s your pension, investments and cash today.'}
-        </p>
-      </div>
-
       {hasReplanned ? (
         <div className="rounded-3xl bg-accent/30 p-6">
           <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -266,22 +235,6 @@ function Forecast() {
             })}
             . Your original plan is still shown alongside this one below, faded — it never
             disappears.
-          </p>
-        </div>
-      ) : null}
-
-      {result.crossoverYear !== null ? (
-        <div className="rounded-3xl bg-accent/40 p-7 sm:p-8">
-          <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Worth pausing on
-          </p>
-          <h2 className="mt-3 text-[20px] font-semibold leading-snug tracking-tight sm:text-[22px]">
-            There’s a year the market starts doing more than you do.
-          </h2>
-          <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-foreground/80">
-            From around age {input.age + result.crossoverYear}, growth on what you already hold
-            typically adds more in a single year than everything you put in that year. The table
-            below shows exactly when.
           </p>
         </div>
       ) : null}
@@ -360,7 +313,6 @@ function Forecast() {
 
       <ForecastYearTable
         rows={rows}
-        crossoverCalendarYear={crossoverCalendarYear}
         pot={pot}
         onPotChange={setPot}
       />

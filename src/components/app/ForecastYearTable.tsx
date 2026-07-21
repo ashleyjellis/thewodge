@@ -1,13 +1,16 @@
 /**
- * The Forecast tab's year-by-year table (spec §4) — value, growth and
- * additions, forecast alongside actual, filterable by pot. The original
- * baseline's value shows as a faded secondary column once a replan exists
- * ("the fork must stay visible, never disappear"). Variance never says
- * "behind" — see varianceLabel().
+ * The Forecast tab's year-by-year table (restructure brief: this is the
+ * tool's working ledger, plan against what's actually happened) — value,
+ * growth and additions, forecast alongside actual, filterable by pot. The
+ * original baseline's value shows as a faded secondary column once a
+ * replan exists ("the fork must stay visible, never disappear"). Purely a
+ * neutral record — the observational reading of this same data (the
+ * crossover year, the variance narrative) lives on the Insights tab, not
+ * here.
  */
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
-import { varianceLabel, type ForecastYearRow, type PotFilter } from '@/lib/householdForecast'
+import type { ForecastYearRow, PotFilter } from '@/lib/householdForecast'
 import { FilterPill } from './FilterPill'
 
 const POT_FILTERS: { value: PotFilter; label: string }[] = [
@@ -28,12 +31,10 @@ function cell(value: number | null, className?: string, divider?: boolean) {
 
 export function ForecastYearTable({
   rows,
-  crossoverCalendarYear,
   pot,
   onPotChange,
 }: {
   rows: ForecastYearRow[]
-  crossoverCalendarYear: number | null
   pot: PotFilter
   onPotChange: (pot: PotFilter) => void
 }) {
@@ -89,9 +90,6 @@ export function ForecastYearTable({
               >
                 Additions
               </th>
-              <th rowSpan={2} className="border-l border-border py-2 pl-3 text-right align-bottom font-medium">
-                Variance
-              </th>
             </tr>
             <tr className="text-[10px]">
               <th className="border-l border-border pb-2 pl-3 pr-3 text-right font-normal">Forecast</th>
@@ -103,36 +101,18 @@ export function ForecastYearTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const isCrossover = row.calendarYear === crossoverCalendarYear
-              return (
-                <tr
-                  key={row.calendarYear}
-                  className={cn('border-t border-border', isCrossover && 'bg-accent/30')}
-                >
-                  <td className="py-2.5 pr-3 text-muted-foreground">
-                    {row.age}
-                    {isCrossover ? (
-                      <span className="ml-2 inline-block rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground">
-                        market takes the lead
-                      </span>
-                    ) : null}
-                  </td>
-                  {hasOriginal ? cell(row.originalValue, 'text-muted-foreground/50') : null}
-                  {cell(row.forecastValue, 'font-semibold text-foreground', true)}
-                  {cell(row.actualValue, 'text-muted-foreground')}
-                  {cell(row.forecastGrowth, 'text-muted-foreground', true)}
-                  {cell(row.actualGrowth, 'text-muted-foreground')}
-                  {cell(row.forecastAdditions, 'text-muted-foreground', true)}
-                  {cell(row.actualAdditions, 'text-muted-foreground')}
-                  <td className="border-l border-border py-2.5 pl-3 text-right text-muted-foreground">
-                    {row.actualValue !== null
-                      ? `${money(row.actualValue - row.forecastValue)} · ${varianceLabel(row.actualValue, row.forecastValue)}`
-                      : '—'}
-                  </td>
-                </tr>
-              )
-            })}
+            {rows.map((row) => (
+              <tr key={row.calendarYear} className="border-t border-border">
+                <td className="py-2.5 pr-3 text-muted-foreground">{row.age}</td>
+                {hasOriginal ? cell(row.originalValue, 'text-muted-foreground/50') : null}
+                {cell(row.forecastValue, 'font-semibold text-foreground', true)}
+                {cell(row.actualValue, 'text-muted-foreground')}
+                {cell(row.forecastGrowth, 'text-muted-foreground', true)}
+                {cell(row.actualGrowth, 'text-muted-foreground')}
+                {cell(row.forecastAdditions, 'text-muted-foreground', true)}
+                {cell(row.actualAdditions, 'text-muted-foreground')}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
