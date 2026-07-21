@@ -7,6 +7,7 @@
  * more explaining than an inline number field comfortably gives.
  */
 import { useState } from 'react'
+import { Check } from 'lucide-react'
 import type { AccountOwner } from '@/lib/accountOwner'
 import type { PotCategory } from '@/lib/householdForecast'
 import type { ContributionBreakdownRow } from '@/lib/scheduledPlan'
@@ -45,12 +46,27 @@ function BreakdownRow({
   const [monthly, setMonthly] = useState(String(row.monthly))
   const [bonus, setBonus] = useState(String(row.annualBonus))
   const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const dirty = (Number(monthly) || 0) !== row.monthly || (Number(bonus) || 0) !== row.annualBonus
+
+  const editMonthly = (v: string) => {
+    setMonthly(numbersOnly(v))
+    setJustSaved(false)
+  }
+  const editBonus = (v: string) => {
+    setBonus(numbersOnly(v))
+    setJustSaved(false)
+  }
 
   const save = async () => {
     setSaving(true)
+    setError(null)
     try {
       await onSave({ monthly: Number(monthly) || 0, annualBonus: Number(bonus) || 0 })
+      setJustSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to save')
     } finally {
       setSaving(false)
     }
@@ -77,7 +93,7 @@ function BreakdownRow({
           <input
             inputMode="decimal"
             value={monthly}
-            onChange={(e) => setMonthly(numbersOnly(e.target.value))}
+            onChange={(e) => editMonthly(e.target.value)}
             className="w-20 bg-transparent text-[14px] font-semibold tabular-nums outline-none"
           />
           <span className="text-[11px] text-muted-foreground">/mo</span>
@@ -87,20 +103,28 @@ function BreakdownRow({
           <input
             inputMode="decimal"
             value={bonus}
-            onChange={(e) => setBonus(numbersOnly(e.target.value))}
+            onChange={(e) => editBonus(e.target.value)}
             className="w-20 bg-transparent text-[14px] font-semibold tabular-nums outline-none"
           />
           <span className="text-[11px] text-muted-foreground">/yr bonus</span>
         </label>
-        <button
-          type="button"
-          disabled={!dirty || saving}
-          onClick={() => void save()}
-          className="rounded-full bg-foreground px-4 py-2 text-[12px] font-semibold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-30"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        {dirty || !justSaved ? (
+          <button
+            type="button"
+            disabled={!dirty || saving}
+            onClick={() => void save()}
+            className="rounded-full bg-foreground px-4 py-2 text-[12px] font-semibold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-30"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        ) : (
+          <span className="flex items-center gap-1 text-[12px] font-medium text-foreground">
+            <Check size={14} strokeWidth={2.75} />
+            Saved
+          </span>
+        )}
       </div>
+      {error ? <p className="mt-1.5 text-[12px] text-muted-foreground">Couldn't save: {error}</p> : null}
     </div>
   )
 }
