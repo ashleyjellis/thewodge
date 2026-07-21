@@ -53,11 +53,13 @@ export function AddPlannedEventModal({
   const [direction, setDirection] = useState<'in' | 'out'>('in')
   const [amount, setAmount] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
     const parsed = Number(amount)
     if (!name.trim() || !amount.trim() || !Number.isFinite(parsed) || parsed <= 0) return
     setSaving(true)
+    setError(null)
     try {
       await onSave({
         owner,
@@ -67,6 +69,8 @@ export function AddPlannedEventModal({
         amount: direction === 'in' ? parsed : -parsed,
       })
       onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to add')
     } finally {
       setSaving(false)
     }
@@ -105,6 +109,7 @@ export function AddPlannedEventModal({
           Money out
         </FilterPill>
       </div>
+      {error ? <p className="mt-3 text-[13px] text-muted-foreground">{error}</p> : null}
       <div className="mt-5 flex gap-2">
         <button
           type="button"

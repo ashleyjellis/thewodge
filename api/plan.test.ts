@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createMigratedTestDb } from '../src/server/db/testHelpers'
 import { createHousehold } from '../src/server/db/households'
+import { createPerson } from '../src/server/db/people'
 import type { Db } from '../src/server/db/client'
 import { handlePlan } from './plan'
 import { fakeReq, fakeRes } from './_lib/testHttp'
@@ -178,6 +179,81 @@ describe('plan API', () => {
     expect(event.name).toBe('House deposit')
     expect(event.amount).toBe(-20_000)
     eventId = event.id
+  })
+
+  it("POST rejects a pension withdrawal dated before that owner's own retirement age", async () => {
+    const lockedHouseholdId = (await createHousehold(db)).id
+    await createPerson(db, {
+      householdId: lockedHouseholdId,
+      name: 'Charlotte',
+      age: 31,
+      retirementAge: 55,
+    })
+    const currentYear = new Date().getUTCFullYear()
+
+    const { res, status, body } = fakeRes()
+    await handlePlan(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: {
+          householdId: lockedHouseholdId,
+          kind: 'planned_event',
+          owner: 'person_a',
+          potCategory: 'pension',
+          year: currentYear + 1, // decades before her retirement
+          name: 'Early pension access',
+          amount: -10_000,
+        },
+      }),
+      res,
+    )
+    expect(status()).toBe(400)
+    expect((body() as { error: string }).error).toMatch(/Charlotte/)
+  })
+
+  it('POST allows a pension withdrawal at or after retirement age, and always allows a pension deposit', async () => {
+    const householdId2 = (await createHousehold(db)).id
+    await createPerson(db, { householdId: householdId2, name: 'Charlotte', age: 31, retirementAge: 55 })
+    const unlockYear = new Date().getUTCFullYear() + (55 - 31)
+
+    const withdrawal = fakeRes()
+    await handlePlan(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: {
+          householdId: householdId2,
+          kind: 'planned_event',
+          owner: 'person_a',
+          potCategory: 'pension',
+          year: unlockYear,
+          name: 'Retirement drawdown',
+          amount: -10_000,
+        },
+      }),
+      withdrawal.res,
+    )
+    expect(withdrawal.status()).toBe(201)
+
+    const deposit = fakeRes()
+    await handlePlan(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: {
+          householdId: householdId2,
+          kind: 'planned_event',
+          owner: 'person_a',
+          potCategory: 'pension',
+          year: new Date().getUTCFullYear(),
+          name: 'Inheritance into pension',
+          amount: 10_000,
+        },
+      }),
+      deposit.res,
+    )
+    expect(deposit.status()).toBe(201)
   })
 
   it('POST rejects a planned event with no name', async () => {

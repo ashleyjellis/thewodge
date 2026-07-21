@@ -13,7 +13,9 @@ import {
   listContributionChanges,
 } from '../src/server/db/contributionChanges.js'
 import { createPlannedEvent, deletePlannedEvent, listPlannedEvents } from '../src/server/db/plannedEvents.js'
+import { listPeople } from '../src/server/db/people.js'
 import type { AccountOwner, ContributionChangeType, PotCategory } from '../src/server/db/schema.js'
+import { checkPensionAccess } from '../src/lib/pensionAccess.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -78,6 +80,16 @@ export async function handlePlan(db: Db, req: ApiRequest, res: ApiResponse): Pro
         if (typeof body.name !== 'string' || !body.name.trim()) return badRequest(res, 'a name is required')
         if (typeof body.amount !== 'number' || !Number.isFinite(body.amount))
           return badRequest(res, 'a real amount is required')
+
+        if (body.potCategory === 'pension' && body.amount < 0) {
+          const people = await listPeople(db, body.householdId)
+          const access = checkPensionAccess(
+            { owner: body.owner, potCategory: body.potCategory, year: body.year, amount: body.amount },
+            new Date().getUTCFullYear(),
+            { personA: people[0] ?? null, personB: people[1] ?? null },
+          )
+          if (!access.allowed) return badRequest(res, access.reason)
+        }
 
         const event = await createPlannedEvent(db, {
           householdId: body.householdId,
