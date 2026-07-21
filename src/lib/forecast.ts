@@ -131,7 +131,8 @@ export type YearPoint = {
   total: PotYearPoint
 }
 
-const clampMoney = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0)
+/** Never negative, never NaN/Infinity — the floor every raw money input passes through. */
+export const clampMoney = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0)
 
 /** Convert a nominal annual rate to the equivalent monthly rate (effective). */
 export function monthlyRate(annualRate: number): number {
@@ -157,7 +158,7 @@ export function futureValueContributions(
   return monthly * ((Math.pow(1 + m, months) - 1) / m)
 }
 
-function monthsToTarget(age: number, targetAge: number): number {
+export function monthsToTarget(age: number, targetAge: number): number {
   return Math.max(0, Math.round((targetAge - age) * 12))
 }
 
@@ -223,7 +224,7 @@ export function projectTotal(
   return pensionFuture + stocksFuture + cashFuture
 }
 
-const SCENARIO_META: { key: ScenarioKey; label: string; delta: number | 'stop' }[] = [
+export const SCENARIO_META: { key: ScenarioKey; label: string; delta: number | 'stop' }[] = [
   { key: 'stop', label: 'Stop contributing today', delta: 'stop' },
   { key: 'carryOn', label: 'Carry on as you are', delta: 0 },
   { key: 'add100', label: 'Add £100 a month', delta: 100 },

@@ -16,6 +16,7 @@ import { postJson } from '@/lib/apiClient'
 import { forecast, projectYearly, type YearPoint } from '@/lib/forecast'
 import {
   buildForecastYearRows,
+  buildPotScenarios,
   ownerStateToForecastInput,
   type FrozenForecastState,
   type OwnerFilter,
@@ -36,6 +37,13 @@ const forecastSeo = seo({
   description: 'Your plan, how reality is tracking against it, and a deliberate way to replan.',
   path: '/app/forecast',
 })
+
+const POT_FILTERS: { value: PotFilter; label: string }[] = [
+  { value: 'total', label: 'Total' },
+  { value: 'cash', label: 'Savings' },
+  { value: 'investments', label: 'Investments' },
+  { value: 'pension', label: 'Pension' },
+]
 
 export const Route = createFileRoute('/app/forecast')({
   head: () => ({
@@ -67,6 +75,7 @@ function Forecast() {
 
   const [owner, setOwner] = useState<OwnerFilter>('total')
   const [pot, setPot] = useState<PotFilter>('total')
+  const [scenariosPot, setScenariosPot] = useState<PotFilter>('total')
   const [planPot, setPlanPot] = useState<PotFilter>('total')
   const [replanning, setReplanning] = useState(false)
   const [note, setNote] = useState('')
@@ -191,6 +200,10 @@ function Forecast() {
   // account data")
   const liveTotal = ownerAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0)
 
+  const potScenarios = buildPotScenarios(input, assumptions, scenariosPot)
+  const scenariosPotLabel =
+    scenariosPot === 'total' ? 'investments' : scenariosPot === 'cash' ? 'savings' : scenariosPot
+
   const submitReplan = async () => {
     setSaving(true)
     setError(null)
@@ -272,38 +285,57 @@ function Forecast() {
       ) : null}
 
       <div className="rounded-3xl bg-card p-7 shadow-soft">
-        <h2 className="text-[15px] font-semibold tracking-tight">What changes if you change</h2>
-        <p className="mt-2 text-[13px] text-muted-foreground">
-          What varying your investment contribution alone does — pension and cash carry on as
-          they are — each shown at {result.targetAge}.
-        </p>
-        <table className="mt-5 w-full text-[14px] tabular-nums">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              <th className="pb-2 font-medium">Choice</th>
-              <th className="pb-2 text-right font-medium">To investments</th>
-              <th className="pb-2 text-right font-medium">At {result.targetAge}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.scenarios.map((s) => (
-              <tr key={s.key} className={cn('border-t border-border', s.current && 'bg-accent/40')}>
-                <td className="py-3 pr-2">
-                  <span className={cn(s.current && 'font-semibold')}>{s.label}</span>
-                  {s.current ? (
-                    <span className="ml-2 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                      now
-                    </span>
-                  ) : null}
-                </td>
-                <td className="py-3 text-right text-muted-foreground">
-                  {s.monthly > 0 ? money(s.monthly) : '—'}
-                </td>
-                <td className="py-3 text-right font-semibold">{money(s.total)}</td>
-              </tr>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight">What changes if you change</h2>
+            <p className="mt-2 max-w-lg text-[13px] text-muted-foreground">
+              {scenariosPot === 'total'
+                ? `What varying your investment contribution alone does — pension and cash carry on as they are — each shown at ${result.targetAge}.`
+                : `What varying your ${scenariosPotLabel} contribution alone does — everything else carries on as it is — each shown at ${result.targetAge}.`}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {POT_FILTERS.map((p) => (
+              <FilterPill key={p.value} active={scenariosPot === p.value} onClick={() => setScenariosPot(p.value)}>
+                {p.label}
+              </FilterPill>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+        <div className="mt-5 overflow-x-auto rounded-2xl">
+          <table className="w-full min-w-[420px] text-[14px] tabular-nums">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                <th className="pb-2 font-medium">Choice</th>
+                <th className="pb-2 text-right font-medium">To {scenariosPotLabel}</th>
+                <th className="pb-2 text-right font-medium">
+                  {scenariosPot === 'total' ? 'Total' : POT_FILTERS.find((p) => p.value === scenariosPot)?.label} at{' '}
+                  {result.targetAge}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {potScenarios.map((s) => (
+                <tr key={s.key} className={cn('border-t border-border', s.current && 'bg-accent/40')}>
+                  <td className="py-3 pr-2">
+                    <span className={cn(s.current && 'font-semibold')}>{s.label}</span>
+                    {s.current ? (
+                      <span className="ml-2 text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                        now
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-3 text-right text-muted-foreground">
+                    {s.monthly > 0 ? money(s.monthly) : '—'}
+                  </td>
+                  <td className="py-3 text-right font-semibold">
+                    {money(scenariosPot === 'total' ? s.total : s.potTotal)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {planPoints ? (

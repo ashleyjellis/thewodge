@@ -9,7 +9,20 @@
  * estimated from income the way the free tool has to, since real data exists
  * here.
  */
-import type { Assumptions, ForecastInput, PotYearPoint, YearPoint } from './forecast.js'
+import {
+  clampMoney,
+  futureValueContributions,
+  futureValueLump,
+  monthlyRate,
+  monthsToTarget,
+  resolvePensionMonthly,
+  SCENARIO_META,
+  type Assumptions,
+  type ForecastInput,
+  type PotYearPoint,
+  type ScenarioKey,
+  type YearPoint,
+} from './forecast.js'
 import { latestSnapshotByAccount, periodGrowth } from './snapshotMath.js'
 import type { AccountOwner } from './accountOwner.js'
 
@@ -197,6 +210,72 @@ export function potPoint(point: YearPoint, pot: PotFilter): PotYearPoint {
 
 function accountsInPot<A extends { potCategory: PotCategory }>(accounts: A[], pot: PotFilter): A[] {
   return pot === 'total' ? accounts : accounts.filter((a) => a.potCategory === pot)
+}
+
+export type PotScenario = {
+  key: ScenarioKey
+  label: string
+  /** the monthly figure actually being varied by this scenario, for
+   *  whichever pot is selected */
+  monthly: number
+  /** just the selected pot's own value at target age under this scenario */
+  potTotal: number
+  /** the whole household's value at target age under this scenario — the
+   *  other two pots held at today's contribution, unchanged */
+  total: number
+  current: boolean
+}
+
+/**
+ * "What changes if you change" scenarios, generalised across pot — unlike
+ * forecast()'s own `scenarios` (always investments, matching the free
+ * tool's simpler single-lever model), this varies whichever pot is
+ * selected: pension, investments, or cash. 'total' still varies
+ * investments (the household's usual flex lever, matching forecast()'s
+ * default so a page that's never touched the pot filter sees no change)
+ * but reports the household total rather than just that one pot.
+ */
+export function buildPotScenarios(input: ForecastInput, a: Assumptions, pot: PotFilter): PotScenario[] {
+  const months = monthsToTarget(input.age, a.targetAge)
+  const mInv = monthlyRate(a.investedRate)
+  const mCash = monthlyRate(a.cashRate)
+
+  const pension = clampMoney(input.pension)
+  const stocks = clampMoney(input.stocks)
+  const cash = clampMoney(input.cash)
+
+  const basePensionMonthly = resolvePensionMonthly(input).monthly
+  const baseStocksMonthly = clampMoney(input.monthly)
+  const baseCashMonthly = clampMoney(input.cashMonthly ?? 0)
+
+  const variesPot: PotCategory = pot === 'pension' ? 'pension' : pot === 'cash' ? 'cash' : 'investments'
+  const baseMonthly =
+    variesPot === 'pension' ? basePensionMonthly : variesPot === 'cash' ? baseCashMonthly : baseStocksMonthly
+
+  return SCENARIO_META.map((s) => {
+    const scenarioMonthly = s.delta === 'stop' ? 0 : baseMonthly + s.delta
+
+    const pensionMonthly = variesPot === 'pension' ? scenarioMonthly : basePensionMonthly
+    const stocksMonthly = variesPot === 'investments' ? scenarioMonthly : baseStocksMonthly
+    const cashMonthly = variesPot === 'cash' ? scenarioMonthly : baseCashMonthly
+
+    const pensionFuture =
+      futureValueLump(pension, mInv, months) + futureValueContributions(pensionMonthly, mInv, months)
+    const stocksFuture =
+      futureValueLump(stocks, mInv, months) + futureValueContributions(stocksMonthly, mInv, months)
+    const cashFuture = futureValueLump(cash, mCash, months) + futureValueContributions(cashMonthly, mCash, months)
+
+    const potTotal = variesPot === 'pension' ? pensionFuture : variesPot === 'cash' ? cashFuture : stocksFuture
+
+    return {
+      key: s.key,
+      label: s.label,
+      monthly: scenarioMonthly,
+      potTotal,
+      total: pensionFuture + stocksFuture + cashFuture,
+      current: s.key === 'carryOn',
+    }
+  })
 }
 
 /**

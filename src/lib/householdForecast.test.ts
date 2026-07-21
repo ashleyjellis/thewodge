@@ -3,6 +3,7 @@ import {
   actualTotalAsOf,
   aggregateHouseholdState,
   buildForecastYearRows,
+  buildPotScenarios,
   canForecast,
   isValidFrozenState,
   ownerStateToForecastInput,
@@ -11,7 +12,7 @@ import {
   type AggregatableAccount,
   type FrozenForecastState,
 } from './householdForecast'
-import { projectYearly } from './forecast'
+import { projectYearly, type Assumptions, type ForecastInput } from './forecast'
 
 const acc = (over: Partial<AggregatableAccount>): AggregatableAccount => ({
   owner: 'person_a',
@@ -464,5 +465,72 @@ describe('varianceLabel (never "behind" — spec §4)', () => {
     const label = varianceLabel(90_000, 100_000)
     expect(label).toBe('tracking to a revised plan')
     expect(label.toLowerCase()).not.toContain('behind')
+  })
+})
+
+describe('buildPotScenarios', () => {
+  const input: ForecastInput = {
+    age: 40,
+    pension: 100_000,
+    stocks: 30_000,
+    cash: 10_000,
+    monthly: 500, // investments
+    pensionMonthly: 800,
+    cashMonthly: 200,
+  }
+  const a: Assumptions = { investedRate: 0.07, cashRate: 0.045, targetAge: 60 }
+
+  it("'total' varies investments, same as forecast()'s own default, but reports the household total", () => {
+    const scenarios = buildPotScenarios(input, a, 'total')
+    const carryOn = scenarios.find((s) => s.key === 'carryOn')!
+    expect(carryOn.monthly).toBe(500) // the investments figure
+    expect(carryOn.potTotal).toBeLessThan(carryOn.total) // potTotal is just investments, total is everything
+  })
+
+  it("'investments' varies the same lever as 'total', but potTotal is investments-only, not the household", () => {
+    const totalScenarios = buildPotScenarios(input, a, 'total')
+    const investmentsScenarios = buildPotScenarios(input, a, 'investments')
+    for (let i = 0; i < 4; i++) {
+      expect(investmentsScenarios[i]!.monthly).toBe(totalScenarios[i]!.monthly) // same monthly varied
+      expect(investmentsScenarios[i]!.total).toBeCloseTo(totalScenarios[i]!.total, 5) // same household total
+    }
+    // but potTotal for 'investments' should equal the investments-only component
+    const carryOn = investmentsScenarios.find((s) => s.key === 'carryOn')!
+    expect(carryOn.potTotal).toBeLessThan(carryOn.total)
+  })
+
+  it("'pension' varies the resolved pension monthly, not investments — and potTotal is pension-only", () => {
+    const scenarios = buildPotScenarios(input, a, 'pension')
+    const carryOn = scenarios.find((s) => s.key === 'carryOn')!
+    expect(carryOn.monthly).toBe(800) // the pension figure, not 500
+    const add100 = scenarios.find((s) => s.key === 'add100')!
+    expect(add100.monthly).toBe(900)
+    // pension's own total should be a big majority of the household total, since it started much larger
+    expect(carryOn.potTotal).toBeGreaterThan(carryOn.total / 2)
+  })
+
+  it("'cash' varies cashMonthly — the exact figure the classic Forecast scenarios table used to drop entirely", () => {
+    const scenarios = buildPotScenarios(input, a, 'cash')
+    const carryOn = scenarios.find((s) => s.key === 'carryOn')!
+    expect(carryOn.monthly).toBe(200)
+    const stop = scenarios.find((s) => s.key === 'stop')!
+    expect(stop.monthly).toBe(0)
+    expect(stop.potTotal).toBeLessThan(carryOn.potTotal)
+  })
+
+  it('changing an unrelated pot never changes the other two pots’ own future values', () => {
+    const pensionScenarios = buildPotScenarios(input, a, 'pension')
+    const add500 = pensionScenarios.find((s) => s.key === 'add500')!
+    const carryOn = pensionScenarios.find((s) => s.key === 'carryOn')!
+    // the household total moved (pension grew), but by exactly the pension potTotal's own delta —
+    // proving investments/cash were held constant underneath, not silently varied too
+    expect(add500.total - carryOn.total).toBeCloseTo(add500.potTotal - carryOn.potTotal, 5)
+  })
+
+  it('four scenarios, "carry on as you are" flagged current, matching forecast()’s own scenarios', () => {
+    const scenarios = buildPotScenarios(input, a, 'total')
+    expect(scenarios).toHaveLength(4)
+    expect(scenarios.filter((s) => s.current)).toHaveLength(1)
+    expect(scenarios.find((s) => s.current)!.key).toBe('carryOn')
   })
 })
