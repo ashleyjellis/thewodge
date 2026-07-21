@@ -271,6 +271,48 @@ describe('cash grows at its own, lower rate (the plain correction)', () => {
   })
 })
 
+describe('cash contributions flow through the whole forecast', () => {
+  it('cashMonthly grows the cash breakdown, not just the starting balance', () => {
+    const withoutContribution: ForecastInput = { age: 40, pension: 0, stocks: 0, cash: 10_000, monthly: 0 }
+    const withContribution: ForecastInput = { ...withoutContribution, cashMonthly: 300 }
+    const bare = forecast(withoutContribution, DEFAULT_ASSUMPTIONS).cash
+    const funded = forecast(withContribution, DEFAULT_ASSUMPTIONS).cash
+    expect(funded.contributions).toBeGreaterThan(0)
+    expect(bare.contributions).toBe(0)
+    expect(funded.future).toBeGreaterThan(bare.future)
+  })
+
+  it('is optional and defaults to 0 — the free tool never sets it, and must be unaffected', () => {
+    const input: ForecastInput = { age: 40, pension: 0, stocks: 0, cash: 10_000, monthly: 0 }
+    const result = forecast(input, DEFAULT_ASSUMPTIONS)
+    expect(result.cash.contributions).toBe(0)
+    expect(result.cash.future).toBeCloseTo(forecast({ ...input, cashMonthly: 0 }, DEFAULT_ASSUMPTIONS).cash.future, 6)
+  })
+
+  it('feeds into projectedTotal — a household with a real cash ISA contribution is not silently short-changed', () => {
+    const input: ForecastInput = { age: 40, pension: 0, stocks: 0, cash: 10_000, monthly: 0, cashMonthly: 500 }
+    const withCashMonthly = forecast(input, DEFAULT_ASSUMPTIONS).projectedTotal
+    const withoutCashMonthly = forecast({ ...input, cashMonthly: 0 }, DEFAULT_ASSUMPTIONS).projectedTotal
+    expect(withCashMonthly).toBeGreaterThan(withoutCashMonthly)
+  })
+
+  it('projectTotal (used by the scenarios table) also includes cashMonthly', () => {
+    const input: ForecastInput = { age: 40, pension: 0, stocks: 0, cash: 10_000, monthly: 0, cashMonthly: 500 }
+    expect(projectTotal(input, 0, DEFAULT_ASSUMPTIONS)).toBeGreaterThan(
+      projectTotal({ ...input, cashMonthly: 0 }, 0, DEFAULT_ASSUMPTIONS),
+    )
+  })
+
+  it('projectYearly reports cash contribution and growth as two separate figures, same as pension/stocks', () => {
+    const input: ForecastInput = { age: 40, pension: 0, stocks: 0, cash: 10_000, monthly: 0, cashMonthly: 200 }
+    const yearly = projectYearly(input, { ...DEFAULT_ASSUMPTIONS, targetAge: 41 })
+    const y1 = yearly.find((p) => p.year === 1)!
+    expect(y1.cash.contribution).toBe(2_400) // 200 × 12
+    expect(y1.cash.growth).toBeGreaterThan(0) // the market's share only, not the contribution
+    expect(y1.cash.endValue).toBeCloseTo(y1.cash.startValue + y1.cash.contribution + y1.cash.growth, 6)
+  })
+})
+
 describe('resolvePensionMonthly (manual > assumed-from-income > none)', () => {
   it('uses a manual entry when given', () => {
     expect(resolvePensionMonthly({ age: 40, pension: 0, stocks: 0, cash: 0, monthly: 0, pensionMonthly: 400 })).toEqual({

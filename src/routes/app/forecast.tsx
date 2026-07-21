@@ -274,13 +274,14 @@ function Forecast() {
       <div className="rounded-3xl bg-card p-7 shadow-soft">
         <h2 className="text-[15px] font-semibold tracking-tight">What changes if you change</h2>
         <p className="mt-2 text-[13px] text-muted-foreground">
-          The same numbers, four choices — each shown at {result.targetAge}.
+          What varying your investment contribution alone does — pension and cash carry on as
+          they are — each shown at {result.targetAge}.
         </p>
         <table className="mt-5 w-full text-[14px] tabular-nums">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="pb-2 font-medium">Choice</th>
-              <th className="pb-2 text-right font-medium">Monthly</th>
+              <th className="pb-2 text-right font-medium">To investments</th>
               <th className="pb-2 text-right font-medium">At {result.targetAge}</th>
             </tr>
           </thead>

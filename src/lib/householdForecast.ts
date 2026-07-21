@@ -29,6 +29,7 @@ export type PotTotals = {
   cash: number
   monthly: number
   pensionMonthly: number
+  cashMonthly: number
 }
 
 /**
@@ -59,7 +60,8 @@ function isValidPotTotals(value: unknown): value is PotTotals {
     typeof v.stocks === 'number' &&
     typeof v.cash === 'number' &&
     typeof v.monthly === 'number' &&
-    typeof v.pensionMonthly === 'number'
+    typeof v.pensionMonthly === 'number' &&
+    typeof v.cashMonthly === 'number'
   )
 }
 
@@ -104,6 +106,7 @@ export function ownerStateToForecastInput(
       cash: totals.cash,
       monthly: totals.monthly,
       pensionMonthly: totals.pensionMonthly,
+      cashMonthly: totals.cashMonthly,
     },
     assumptions: {
       investedRate: state.investedRate,
@@ -142,6 +145,7 @@ function potTotalsFor(accounts: AggregatableAccount[], age: number): PotTotals {
     cash: sumBalance('cash'),
     monthly: sumMonthly('investments'),
     pensionMonthly: sumMonthly('pension'),
+    cashMonthly: sumMonthly('cash'),
   }
 }
 

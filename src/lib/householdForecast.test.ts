@@ -67,8 +67,24 @@ describe('aggregateHouseholdState', () => {
       acc({ owner: 'person_b', potCategory: 'pension', currentBalance: 40_000 }),
       acc({ owner: 'joint', potCategory: 'cash', currentBalance: 5_000 }),
     ])
-    expect(state.personA).toEqual({ age: 40, pension: 100_000, stocks: 0, cash: 0, monthly: 0, pensionMonthly: 0 })
-    expect(state.personB).toEqual({ age: 34, pension: 40_000, stocks: 0, cash: 0, monthly: 0, pensionMonthly: 0 })
+    expect(state.personA).toEqual({
+      age: 40,
+      pension: 100_000,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      pensionMonthly: 0,
+      cashMonthly: 0,
+    })
+    expect(state.personB).toEqual({
+      age: 34,
+      pension: 40_000,
+      stocks: 0,
+      cash: 0,
+      monthly: 0,
+      pensionMonthly: 0,
+      cashMonthly: 0,
+    })
     expect(state.joint.cash).toBe(5_000)
     expect(state.joint.age).toBe(state.total.age) // joint has no person of its own — anchored to the household age
   })
@@ -91,15 +107,39 @@ describe('ownerStateToForecastInput', () => {
     targetAge: 60,
     investedRate: 0.07,
     cashRate: 0.045,
-    total: { age: 34, pension: 140_000, stocks: 30_000, cash: 12_000, monthly: 300, pensionMonthly: 500 },
-    personA: { age: 36, pension: 100_000, stocks: 20_000, cash: 0, monthly: 200, pensionMonthly: 500 },
+    total: {
+      age: 34,
+      pension: 140_000,
+      stocks: 30_000,
+      cash: 12_000,
+      monthly: 300,
+      pensionMonthly: 500,
+      cashMonthly: 150,
+    },
+    personA: {
+      age: 36,
+      pension: 100_000,
+      stocks: 20_000,
+      cash: 0,
+      monthly: 200,
+      pensionMonthly: 500,
+      cashMonthly: 0,
+    },
     personB: null,
-    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0 },
+    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0, cashMonthly: 150 },
   }
 
-  it("maps the 'total' slice onto ForecastInput + Assumptions", () => {
+  it("maps the 'total' slice onto ForecastInput + Assumptions, cashMonthly included", () => {
     const result = ownerStateToForecastInput(state, 'total')!
-    expect(result.input).toEqual({ age: 34, pension: 140_000, stocks: 30_000, cash: 12_000, monthly: 300, pensionMonthly: 500 })
+    expect(result.input).toEqual({
+      age: 34,
+      pension: 140_000,
+      stocks: 30_000,
+      cash: 12_000,
+      monthly: 300,
+      pensionMonthly: 500,
+      cashMonthly: 150,
+    })
     expect(result.assumptions).toEqual({ investedRate: 0.07, cashRate: 0.045, targetAge: 60 })
   })
 
@@ -124,11 +164,32 @@ describe('isValidFrozenState', () => {
     targetAge: 60,
     investedRate: 0.07,
     cashRate: 0.045,
-    total: { age: 34, pension: 140_000, stocks: 30_000, cash: 12_000, monthly: 300, pensionMonthly: 500 },
-    personA: { age: 36, pension: 100_000, stocks: 20_000, cash: 0, monthly: 200, pensionMonthly: 500 },
+    total: {
+      age: 34,
+      pension: 140_000,
+      stocks: 30_000,
+      cash: 12_000,
+      monthly: 300,
+      pensionMonthly: 500,
+      cashMonthly: 150,
+    },
+    personA: {
+      age: 36,
+      pension: 100_000,
+      stocks: 20_000,
+      cash: 0,
+      monthly: 200,
+      pensionMonthly: 500,
+      cashMonthly: 0,
+    },
     personB: null,
-    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0 },
+    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0, cashMonthly: 150 },
   }
+
+  it('rejects a well-formed state that predates cashMonthly — the shape stored before this fix shipped', () => {
+    const { cashMonthly: _cashMonthly, ...totalWithoutCashMonthly } = state.total
+    expect(isValidFrozenState({ ...state, total: totalWithoutCashMonthly })).toBe(false)
+  })
 
   it('accepts a well-formed current-shape state', () => {
     expect(isValidFrozenState(state)).toBe(true)

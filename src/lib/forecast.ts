@@ -3,8 +3,10 @@
  *
  * Pension and stocks/shares grow at a nominal equity rate; cash grows at a
  * separate, lower rate — never the equity rate. Monthly contributions to
- * investments come from what's entered directly. Pension contributions come from
- * whichever of these is available, in order: a manually-entered monthly pension
+ * investments and cash come from what's entered directly (cashMonthly is
+ * optional — the free tool never sets it, so cash there still grows from its
+ * starting balance alone). Pension contributions come from whichever of
+ * these is available, in order: a manually-entered monthly pension
  * contribution; failing that, a typical employer + personal split assumed against
  * an entered income; failing that, nothing — pension then grows from today's
  * balance alone, which the UI must flag clearly rather than let pass silently.
@@ -30,6 +32,11 @@ export type ForecastInput = {
   monthly: number
   /** manually-entered monthly contribution to pension, if given */
   pensionMonthly?: number
+  /** monthly contribution to cash savings, if given — optional and defaults
+   *  to 0 so the free tool (which has no cash-contribution input) is
+   *  unaffected; the logged-in app's real cash ISAs/savings accounts do
+   *  have one and must not have it silently dropped */
+  cashMonthly?: number
   /** annual income (salary) — used only to estimate a pension contribution when
    *  pensionMonthly isn't given; never used for advice or comparison */
   income?: number
@@ -210,7 +217,9 @@ export function projectTotal(
   const stocksFuture =
     futureValueLump(stocks, mInv, months) +
     futureValueContributions(clampMoney(monthly), mInv, months)
-  const cashFuture = futureValueLump(cash, mCash, months)
+  const cashFuture =
+    futureValueLump(cash, mCash, months) +
+    futureValueContributions(clampMoney(input.cashMonthly ?? 0), mCash, months)
   return pensionFuture + stocksFuture + cashFuture
 }
 
@@ -223,9 +232,9 @@ const SCENARIO_META: { key: ScenarioKey; label: string; delta: number | 'stop' }
 
 /**
  * Year-by-year projection, split by pot. Whole years from today (year 0) to the
- * target age. Cash grows from its starting balance only. Pension and stocks each
- * grow from their starting balance plus their own resolved monthly contribution
- * (see resolvePensionMonthly for how pension's is decided). Growth for a year is
+ * target age. Each pot grows from its starting balance plus its own monthly
+ * contribution — cashMonthly for cash, the direct input for stocks, and
+ * whichever resolvePensionMonthly decides for pension. Growth for a year is
  * derived the same way throughout this codebase: endValue − startValue − contribution.
  */
 export function projectYearly(
@@ -236,6 +245,7 @@ export function projectYearly(
   const stocksToday = clampMoney(input.stocks)
   const cashToday = clampMoney(input.cash)
   const stocksMonthly = clampMoney(input.monthly)
+  const cashMonthly = clampMoney(input.cashMonthly ?? 0)
   const { monthly: pensionMonthly } = resolvePensionMonthly(input)
   const years = Math.max(0, Math.round(a.targetAge - input.age))
   const mInv = monthlyRate(a.investedRate)
@@ -271,13 +281,16 @@ export function projectYearly(
     const stocksEnd =
       futureValueLump(stocksToday, mInv, monthsElapsed) +
       futureValueContributions(stocksMonthly, mInv, monthsElapsed)
-    const cashEnd = futureValueLump(cashToday, mCash, monthsElapsed)
+    const cashEnd =
+      futureValueLump(cashToday, mCash, monthsElapsed) +
+      futureValueContributions(cashMonthly, mCash, monthsElapsed)
     const pensionContribution = pensionMonthly * 12
     const stocksContribution = stocksMonthly * 12
+    const cashContribution = cashMonthly * 12
 
     const pensionGrowth = pensionEnd - prevPension - pensionContribution
     const stocksGrowth = stocksEnd - prevStocks - stocksContribution
-    const cashGrowth = cashEnd - prevCash
+    const cashGrowth = cashEnd - prevCash - cashContribution
 
     points.push({
       year: y,
@@ -294,10 +307,15 @@ export function projectYearly(
         growth: stocksGrowth,
         endValue: stocksEnd,
       },
-      cash: { startValue: prevCash, contribution: 0, growth: cashGrowth, endValue: cashEnd },
+      cash: {
+        startValue: prevCash,
+        contribution: cashContribution,
+        growth: cashGrowth,
+        endValue: cashEnd,
+      },
       total: {
         startValue: prevPension + prevStocks + prevCash,
-        contribution: pensionContribution + stocksContribution,
+        contribution: pensionContribution + stocksContribution + cashContribution,
         growth: pensionGrowth + stocksGrowth + cashGrowth,
         endValue: pensionEnd + stocksEnd + cashEnd,
       },
@@ -340,7 +358,12 @@ export function forecast(
     months,
   )
   const stocks = breakdownFor(clampMoney(input.stocks), stocksMonthly, a.investedRate, months)
-  const cash = breakdownFor(clampMoney(input.cash), 0, a.cashRate, months)
+  const cash = breakdownFor(
+    clampMoney(input.cash),
+    clampMoney(input.cashMonthly ?? 0),
+    a.cashRate,
+    months,
+  )
 
   const todayTotal = pension.today + stocks.today + cash.today
   const projectedTotal = pension.future + stocks.future + cash.future
