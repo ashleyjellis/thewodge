@@ -10,6 +10,7 @@ import { SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts, type Account } from '@/state/useAccounts'
+import { useSalaryChanges } from '@/state/useSalaryChanges'
 import { groupAccounts } from '@/lib/groupAccounts'
 import { money } from '@/lib/format'
 import { postJson, patchJson } from '@/lib/apiClient'
@@ -18,6 +19,7 @@ import {
   personFormToPayload,
   type PersonData,
 } from '@/components/app/PersonCard'
+import { UpdateSalaryModal } from '@/components/app/UpdateSalaryModal'
 import { AccountForm, type AccountFormPayload } from '@/components/app/AccountForm'
 import { AccountRow } from '@/components/app/AccountRow'
 
@@ -55,10 +57,12 @@ function AccountsPage() {
     error: accountsError,
     refetch: refetchAccounts,
   } = useAccounts(household?.id ?? null)
+  const { salaryChanges, refetch: refetchSalaryChanges } = useSalaryChanges(household?.id ?? null)
 
   const [addingPerson, setAddingPerson] = useState(false)
   const [addingAccount, setAddingAccount] = useState(false)
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [updatingSalaryFor, setUpdatingSalaryFor] = useState<PersonData | null>(null)
 
   if (householdLoading) {
     return <p className="text-[14px] text-muted-foreground">Loading…</p>
@@ -82,6 +86,17 @@ function AccountsPage() {
       setAddingPerson(false)
     }
     await refetchHousehold()
+  }
+
+  const latestSalaryChangeFor = (personId: string) => {
+    const changes = salaryChanges.filter((c) => c.personId === personId)
+    if (changes.length === 0) return null
+    return changes.reduce((latest, c) => (c.effectiveYear > latest.effectiveYear ? c : latest))
+  }
+
+  const saveSalaryChange = async (personId: string, input: { effectiveYear: number; salary: number }) => {
+    await postJson('/api/salaryChanges', { personId, ...input })
+    await refetchSalaryChanges()
   }
 
   const saveAccount = async (payload: AccountFormPayload) => {
@@ -139,7 +154,9 @@ function AccountsPage() {
             <PersonCard
               key={p.id}
               person={p as PersonData}
+              latestSalaryChange={latestSalaryChangeFor(p.id)}
               onSave={(payload) => savePerson(p.id, payload)}
+              onUpdateSalary={() => setUpdatingSalaryFor(p as PersonData)}
             />
           ))}
           {addingPerson ? (
@@ -258,6 +275,16 @@ function AccountsPage() {
           ))}
         </div>
       </section>
+
+      {updatingSalaryFor ? (
+        <UpdateSalaryModal
+          personName={updatingSalaryFor.name}
+          currentSalary={latestSalaryChangeFor(updatingSalaryFor.id)?.salary ?? updatingSalaryFor.salary}
+          defaultYear={new Date().getUTCFullYear()}
+          onSave={(input) => saveSalaryChange(updatingSalaryFor.id, input)}
+          onClose={() => setUpdatingSalaryFor(null)}
+        />
+      ) : null}
     </div>
   )
 }

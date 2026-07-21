@@ -12,6 +12,7 @@ export type PersonFormValues = {
   age: string
   retirementAge: string
   salary: string
+  salaryGrowthPct: string
   bonus: string
   employerPensionUserPct: string
   employerPensionMatchPct: string
@@ -24,6 +25,7 @@ export type PersonData = {
   age: number
   retirementAge: number
   salary: number | null
+  salaryGrowthPct: number | null
   bonus: number | null
   employerPensionUserPct: number | null
   employerPensionMatchPct: number | null
@@ -35,6 +37,7 @@ const EMPTY: PersonFormValues = {
   age: '',
   retirementAge: '60',
   salary: '',
+  salaryGrowthPct: '',
   bonus: '',
   employerPensionUserPct: '',
   employerPensionMatchPct: '',
@@ -49,6 +52,7 @@ function toFormValues(p: PersonData): PersonFormValues {
     age: String(p.age),
     retirementAge: String(p.retirementAge),
     salary: s(p.salary),
+    salaryGrowthPct: pct(p.salaryGrowthPct),
     bonus: s(p.bonus),
     employerPensionUserPct: pct(p.employerPensionUserPct),
     employerPensionMatchPct: pct(p.employerPensionMatchPct),
@@ -70,6 +74,7 @@ export function personFormToPayload(f: PersonFormValues) {
     age: n(f.age) ?? 0,
     retirementAge: n(f.retirementAge) ?? 60,
     salary: n(f.salary),
+    salaryGrowthPct: pctToFraction(f.salaryGrowthPct),
     bonus: n(f.bonus),
     employerPensionUserPct: pctToFraction(f.employerPensionUserPct),
     employerPensionMatchPct: pctToFraction(f.employerPensionMatchPct),
@@ -79,12 +84,17 @@ export function personFormToPayload(f: PersonFormValues) {
 
 export function PersonCard({
   person,
+  latestSalaryChange,
   onSave,
   onCancelNew,
+  onUpdateSalary,
 }: {
   person: PersonData | null
+  /** the most recent actual salary logged for this person, if any — see UpdateSalaryModal */
+  latestSalaryChange?: { effectiveYear: number; salary: number } | null
   onSave: (payload: ReturnType<typeof personFormToPayload>) => Promise<void>
   onCancelNew?: () => void
+  onUpdateSalary?: () => void
 }) {
   const [editing, setEditing] = useState(person === null)
   const [saving, setSaving] = useState(false)
@@ -104,6 +114,7 @@ export function PersonCard({
   if (!editing && person) {
     const employerTotal =
       (person.employerPensionMatchPct ?? 0) + (person.employerPensionAdditionalPct ?? 0)
+    const displaySalary = latestSalaryChange?.salary ?? person.salary
     return (
       <div className="rounded-3xl bg-card p-6 shadow-soft">
         <div className="flex items-start justify-between gap-3">
@@ -122,7 +133,23 @@ export function PersonCard({
           </button>
         </div>
         <div className="mt-4 space-y-1.5 text-[13px] text-muted-foreground">
-          {person.salary !== null ? <p>Salary {money(person.salary)}</p> : null}
+          {displaySalary !== null ? (
+            <p className="flex flex-wrap items-center gap-x-2">
+              <span>
+                Salary {money(displaySalary)}
+                {latestSalaryChange ? ` (as of ${latestSalaryChange.effectiveYear})` : ''}
+              </span>
+              {onUpdateSalary ? (
+                <button
+                  type="button"
+                  onClick={onUpdateSalary}
+                  className="text-[12px] font-medium text-foreground underline underline-offset-2"
+                >
+                  Update
+                </button>
+              ) : null}
+            </p>
+          ) : null}
           {person.bonus !== null ? <p>Bonus {money(person.bonus)}</p> : null}
           {employerTotal > 0 ? (
             <p>
@@ -162,6 +189,14 @@ export function PersonCard({
           value={values.salary}
           onChange={set('salary')}
           placeholder="88,000"
+          inputMode="decimal"
+        />
+        <AppField
+          label="Assumed salary growth"
+          hint="%/yr — actual updates logged separately"
+          value={values.salaryGrowthPct}
+          onChange={set('salaryGrowthPct')}
+          placeholder="2"
           inputMode="decimal"
         />
         <AppField
