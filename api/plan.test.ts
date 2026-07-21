@@ -60,6 +60,53 @@ describe('plan API', () => {
     changeId = change.id
   })
 
+  it('POST creates a grow_pct contribution change', async () => {
+    const { res, status, body } = fakeRes()
+    await handlePlan(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: {
+          householdId,
+          kind: 'contribution_change',
+          owner: 'person_a',
+          potCategory: 'investments',
+          effectiveYear: 2029,
+          changeType: 'grow_pct',
+          value: 0.01,
+        },
+      }),
+      res,
+    )
+    expect(status()).toBe(201)
+    const change = (body() as { contributionChange: { changeType: string; value: number } }).contributionChange
+    expect(change.changeType).toBe('grow_pct')
+  })
+
+  it('POST creates an annual_bonus contribution change — every valid changeType must actually be accepted, not just typed', async () => {
+    const { res, status, body } = fakeRes()
+    await handlePlan(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: {
+          householdId,
+          kind: 'contribution_change',
+          owner: 'person_a',
+          potCategory: 'investments',
+          effectiveYear: 2030,
+          changeType: 'annual_bonus',
+          value: 2_000,
+        },
+      }),
+      res,
+    )
+    expect(status()).toBe(201)
+    const change = (body() as { contributionChange: { changeType: string; value: number } }).contributionChange
+    expect(change.changeType).toBe('annual_bonus')
+    expect(change.value).toBe(2_000)
+  })
+
   it('POST rejects an unknown owner', async () => {
     const { res, status } = fakeRes()
     await handlePlan(

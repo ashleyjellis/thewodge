@@ -203,7 +203,7 @@ export const forecastSnapshots = sqliteTable(
 // historical record, so rows are freely updated/deleted (see
 // contributionChanges.ts).
 
-export const CONTRIBUTION_CHANGE_TYPES = ['set', 'grow_pct'] as const
+export const CONTRIBUTION_CHANGE_TYPES = ['set', 'grow_pct', 'annual_bonus'] as const
 export type ContributionChangeType = (typeof CONTRIBUTION_CHANGE_TYPES)[number]
 
 export const contributionChanges = sqliteTable(
@@ -219,8 +219,10 @@ export const contributionChanges = sqliteTable(
     effectiveYear: integer('effective_year').notNull(),
     changeType: text('change_type').notNull().$type<ContributionChangeType>(),
     /** 'set': new flat £/month. 'grow_pct': fractional annual growth (0.01 =
-     *  1%), applied every year from effectiveYear onward until superseded —
-     *  see scheduledPlan.ts's resolveMonthlySchedule for the exact math. */
+     *  1%), applied every year from effectiveYear onward until superseded.
+     *  'annual_bonus': a flat £ added once a year (not monthly) every year
+     *  from effectiveYear onward until superseded — see scheduledPlan.ts's
+     *  resolveMonthlySchedule/resolveAnnualBonusSchedule for the exact math. */
     value: real('value').notNull(),
     note: text('note'),
     createdAt: text('created_at').notNull(),
@@ -232,7 +234,10 @@ export const contributionChanges = sqliteTable(
       'contribution_changes_pot_category_check',
       sql`${t.potCategory} in ('pension','investments','cash')`,
     ),
-    check('contribution_changes_change_type_check', sql`${t.changeType} in ('set','grow_pct')`),
+    check(
+      'contribution_changes_change_type_check',
+      sql`${t.changeType} in ('set','grow_pct','annual_bonus')`,
+    ),
   ],
 )
 

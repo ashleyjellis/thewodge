@@ -13,7 +13,7 @@ import type { OwnerFilter, PotCategory } from './householdForecast.js'
 
 const POT_CATEGORIES: readonly PotCategory[] = ['pension', 'investments', 'cash']
 
-export type ContributionChangeType = 'set' | 'grow_pct'
+export type ContributionChangeType = 'set' | 'grow_pct' | 'annual_bonus'
 
 export type ContributionChange = {
   potCategory: PotCategory
@@ -21,7 +21,11 @@ export type ContributionChange = {
   changeType: ContributionChangeType
   /** 'set': new flat £/month from effectiveYear onward. 'grow_pct': fractional
    *  annual growth (0.01 = 1%), compounding every year from effectiveYear
-   *  onward — not a one-time bump — until a later change supersedes it. */
+   *  onward — not a one-time bump — until a later change supersedes it.
+   *  'annual_bonus': a flat £ added once a year (not monthly), every year
+   *  from effectiveYear onward until superseded — see
+   *  resolveAnnualBonusSchedule, kept entirely separate from the monthly
+   *  schedule resolveMonthlySchedule computes. */
   value: number
 }
 
@@ -40,7 +44,10 @@ type ScheduleMode =
  * Resolves the effective monthly contribution for every calendar year in
  * [startYear, endYear], given a base monthly figure and this pot's ordered
  * list of future changes. Never negative — a 'set' to a negative figure or a
- * 'grow_pct' shrinking below zero both clamp to 0.
+ * 'grow_pct' shrinking below zero both clamp to 0. Ignores 'annual_bonus'
+ * changes entirely — those are a separate, non-monthly stream resolved by
+ * resolveAnnualBonusSchedule instead, so a caller can pass the same mixed
+ * change list to both without pre-filtering.
  */
 export function resolveMonthlySchedule(
   baseMonthly: number,
@@ -48,7 +55,9 @@ export function resolveMonthlySchedule(
   startYear: number,
   endYear: number,
 ): Map<number, number> {
-  const sorted = [...changes].sort((a, b) => a.effectiveYear - b.effectiveYear)
+  const sorted = [...changes]
+    .filter((c) => c.changeType === 'set' || c.changeType === 'grow_pct')
+    .sort((a, b) => a.effectiveYear - b.effectiveYear)
   const schedule = new Map<number, number>()
   let mode: ScheduleMode = { kind: 'flat', value: baseMonthly }
   let idx = 0
@@ -75,6 +84,36 @@ export function resolveMonthlySchedule(
       idx++
     }
     schedule.set(year, Math.max(0, valueAt(year)))
+  }
+  return schedule
+}
+
+/**
+ * Resolves the effective annual bonus for every calendar year in
+ * [startYear, endYear] — a flat £ added once a year, not compounding like
+ * 'grow_pct' and not monthly like the rest of the schedule. 0 before any
+ * 'annual_bonus' change exists; the latest one with effectiveYear <= year
+ * wins, same "supersedes, doesn't stack" rule as resolveMonthlySchedule.
+ * Never negative.
+ */
+export function resolveAnnualBonusSchedule(
+  changes: ContributionChange[],
+  startYear: number,
+  endYear: number,
+): Map<number, number> {
+  const sorted = [...changes]
+    .filter((c) => c.changeType === 'annual_bonus')
+    .sort((a, b) => a.effectiveYear - b.effectiveYear)
+  const schedule = new Map<number, number>()
+  let current = 0
+  let idx = 0
+
+  for (let year = startYear; year <= endYear; year++) {
+    while (idx < sorted.length && sorted[idx]!.effectiveYear <= year) {
+      current = Math.max(0, sorted[idx]!.value)
+      idx++
+    }
+    schedule.set(year, current)
   }
   return schedule
 }
@@ -118,8 +157,12 @@ function eventsFor(events: PlannedEvent[], pot: PotCategory, calendarYear: numbe
  * Year-by-year projection with a live contribution schedule and planned
  * events layered on top, one pot at a time, then combined into a total.
  * Each year's growth is the market's share only — endBeforeEvents − start −
- * contribution — matching this codebase's rule everywhere else that a
- * non-growth cash movement is never folded into a growth figure.
+ * (monthly contribution) — matching this codebase's rule everywhere else
+ * that a non-growth cash movement is never folded into a growth figure. An
+ * annual bonus is money in the same sense as the monthly contribution (it's
+ * folded into `contribution`, not `events`), but — like a planned event —
+ * arrives as a lump with no growth of its own that same year, rather than
+ * compounding monthly.
  */
 export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYearPoint[] {
   const years = Math.max(0, Math.round(input.targetAge - input.age))
@@ -130,6 +173,17 @@ export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYear
       pot,
       resolveMonthlySchedule(
         input.pots[pot].baseMonthly,
+        input.changes.filter((c) => c.potCategory === pot),
+        input.startYear,
+        endYear,
+      ),
+    ]),
+  ) as Record<PotCategory, Map<number, number>>
+
+  const bonusSchedules = Object.fromEntries(
+    POT_CATEGORIES.map((pot) => [
+      pot,
+      resolveAnnualBonusSchedule(
         input.changes.filter((c) => c.potCategory === pot),
         input.startYear,
         endYear,
@@ -167,17 +221,18 @@ export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYear
     for (const pot of POT_CATEGORIES) {
       const start = balances[pot]
       const monthly = schedules[pot].get(calendarYear) ?? 0
+      const bonus = bonusSchedules[pot].get(calendarYear) ?? 0
       const m = monthlyRate(input.pots[pot].rate)
-      const beforeEvents = futureValueLump(start, m, 12) + futureValueContributions(monthly, m, 12)
-      const contribution = monthly * 12
+      const beforeLumpSums = futureValueLump(start, m, 12) + futureValueContributions(monthly, m, 12)
+      const contribution = monthly * 12 + bonus
       const eventDelta = eventsFor(input.events, pot, calendarYear)
-      const end = Math.max(0, beforeEvents + eventDelta)
+      const end = Math.max(0, beforeLumpSums + bonus + eventDelta)
 
       potPoints[pot] = {
         startValue: start,
         contribution,
         events: eventDelta,
-        growth: beforeEvents - start - contribution,
+        growth: beforeLumpSums - start - monthly * 12,
         endValue: end,
       }
       balances[pot] = end
@@ -276,4 +331,45 @@ export function buildScheduledPlan(params: {
     })),
     events: events.map((e) => ({ potCategory: e.potCategory, year: e.year, amount: e.amount })),
   })
+}
+
+export type ContributionBreakdownRow = {
+  owner: AccountOwner
+  potCategory: PotCategory
+  monthly: number
+  annualBonus: number
+}
+
+const ALL_OWNERS: readonly AccountOwner[] = ['person_a', 'person_b', 'joint']
+
+/**
+ * The Plan table's per-person, per-pot breakdown for one specific calendar
+ * year — what an aggregated Contributions figure is actually made of.
+ * "Total household" therefore isn't one thing to edit, it's up to six —
+ * only the (owner, pot) combinations that have at least one account are
+ * returned, since there's nothing meaningful to show or edit otherwise.
+ */
+export function resolveContributionBreakdown(params: {
+  year: number
+  accounts: ScheduledPlanAccount[]
+  changes: OwnerScopedContributionChange[]
+}): ContributionBreakdownRow[] {
+  const rows: ContributionBreakdownRow[] = []
+
+  for (const owner of ALL_OWNERS) {
+    for (const pot of POT_CATEGORIES) {
+      const ownerPotAccounts = params.accounts.filter((a) => a.owner === owner && a.potCategory === pot)
+      if (ownerPotAccounts.length === 0) continue
+
+      const baseMonthly = ownerPotAccounts.reduce((sum, a) => sum + a.monthlyContribution, 0)
+      const relevantChanges = params.changes.filter((c) => c.owner === owner && c.potCategory === pot)
+      const monthly =
+        resolveMonthlySchedule(baseMonthly, relevantChanges, params.year, params.year).get(params.year) ?? 0
+      const annualBonus =
+        resolveAnnualBonusSchedule(relevantChanges, params.year, params.year).get(params.year) ?? 0
+
+      rows.push({ owner, potCategory: pot, monthly, annualBonus })
+    }
+  }
+  return rows
 }

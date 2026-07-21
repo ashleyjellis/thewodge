@@ -8,12 +8,19 @@
  */
 import { useState } from 'react'
 import type { AccountOwner } from '@/lib/accountOwner'
-import type { PotFilter } from '@/lib/householdForecast'
-import type { ScheduledYearPoint } from '@/lib/scheduledPlan'
+import type { PotCategory, PotFilter } from '@/lib/householdForecast'
+import {
+  resolveContributionBreakdown,
+  type ContributionBreakdownRow,
+  type ContributionChangeType,
+  type ScheduledPlanAccount,
+  type ScheduledYearPoint,
+} from '@/lib/scheduledPlan'
 import { money, percent } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { FilterPill } from './FilterPill'
 import { AddPlannedEventModal } from './AddPlannedEventModal'
+import { ContributionBreakdown } from './ContributionBreakdown'
 import { EditContributionModal } from './EditContributionModal'
 import type { ContributionChange, PlannedEvent } from '@/state/usePlan'
 
@@ -36,6 +43,7 @@ export function PlanTable({
   pot,
   onPotChange,
   people,
+  accounts,
   defaultOwner,
   investedRate,
   cashRate,
@@ -50,6 +58,7 @@ export function PlanTable({
   pot: PotFilter
   onPotChange: (pot: PotFilter) => void
   people: { id: string; name: string }[]
+  accounts: ScheduledPlanAccount[]
   defaultOwner: AccountOwner
   investedRate: number
   cashRate: number
@@ -57,14 +66,14 @@ export function PlanTable({
   plannedEvents: PlannedEvent[]
   onAddContributionChange: (input: {
     owner: AccountOwner
-    potCategory: 'pension' | 'investments' | 'cash'
+    potCategory: PotCategory
     effectiveYear: number
-    changeType: 'set' | 'grow_pct'
+    changeType: ContributionChangeType
     value: number
   }) => Promise<void>
   onAddPlannedEvent: (input: {
     owner: AccountOwner
-    potCategory: 'pension' | 'investments' | 'cash'
+    potCategory: PotCategory
     year: number
     name: string
     amount: number
@@ -72,7 +81,10 @@ export function PlanTable({
   onRemovePlannedEvent: (id: string) => Promise<void>
 }) {
   const [horizon, setHorizon] = useState<5 | 10>(10)
-  const [editingYear, setEditingYear] = useState<number | null>(null)
+  const [breakdownYear, setBreakdownYear] = useState<number | null>(null)
+  const [growingRow, setGrowingRow] = useState<{ owner: AccountOwner; potCategory: PotCategory; year: number } | null>(
+    null,
+  )
   const [addingEventYear, setAddingEventYear] = useState<number | null>(null)
 
   const columns = points.slice(1, 1 + horizon)
@@ -177,14 +189,18 @@ export function PlanTable({
                   <td key={c.calendarYear} className="min-w-[110px] py-2.5 pr-4 align-top text-right">
                     <button
                       type="button"
-                      onClick={() => setEditingYear(c.calendarYear)}
+                      onClick={() => setBreakdownYear(c.calendarYear)}
                       className="underline decoration-dotted underline-offset-4 hover:text-foreground"
                     >
                       {money(potPoint(c, pot).contribution)}
                     </button>
                     {changesThisYear.map((ch) => (
                       <div key={ch.id} className="mt-1 text-[11px] text-muted-foreground">
-                        {ch.changeType === 'set' ? 'changed' : `+${percent(ch.value)}/yr from here`}
+                        {ch.changeType === 'set'
+                          ? 'changed'
+                          : ch.changeType === 'grow_pct'
+                            ? `+${percent(ch.value)}/yr from here`
+                            : `${money(ch.value)}/yr bonus from here`}
                       </div>
                     ))}
                   </td>
@@ -232,15 +248,53 @@ export function PlanTable({
         </table>
       </div>
 
-      {editingYear !== null ? (
+      {breakdownYear !== null ? (
+        <ContributionBreakdown
+          year={breakdownYear}
+          rows={resolveContributionBreakdown({
+            year: breakdownYear,
+            accounts,
+            changes: contributionChanges,
+          })}
+          people={people}
+          onSaveRow={async (row: ContributionBreakdownRow, input) => {
+            if (input.monthly !== row.monthly) {
+              await onAddContributionChange({
+                owner: row.owner,
+                potCategory: row.potCategory,
+                effectiveYear: breakdownYear,
+                changeType: 'set',
+                value: input.monthly,
+              })
+            }
+            if (input.annualBonus !== row.annualBonus) {
+              await onAddContributionChange({
+                owner: row.owner,
+                potCategory: row.potCategory,
+                effectiveYear: breakdownYear,
+                changeType: 'annual_bonus',
+                value: input.annualBonus,
+              })
+            }
+          }}
+          onGrowInsteadRow={(row) =>
+            setGrowingRow({ owner: row.owner, potCategory: row.potCategory, year: breakdownYear })
+          }
+          onClose={() => setBreakdownYear(null)}
+        />
+      ) : null}
+
+      {growingRow !== null ? (
         <EditContributionModal
           people={people}
           years={columns.map((c) => c.calendarYear)}
-          defaultOwner={defaultOwner}
-          defaultPotCategory={pot === 'total' ? 'investments' : pot}
-          defaultYear={editingYear}
+          defaultOwner={growingRow.owner}
+          defaultPotCategory={growingRow.potCategory}
+          defaultYear={growingRow.year}
+          defaultChangeType="grow_pct"
+          lockOwnerPotYear
           onSave={onAddContributionChange}
-          onClose={() => setEditingYear(null)}
+          onClose={() => setGrowingRow(null)}
         />
       ) : null}
 

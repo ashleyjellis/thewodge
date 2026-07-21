@@ -25,7 +25,7 @@ import {
 
 const OWNERS: readonly AccountOwner[] = ['person_a', 'person_b', 'joint']
 const POTS: readonly PotCategory[] = ['pension', 'investments', 'cash']
-const CHANGE_TYPES: readonly ContributionChangeType[] = ['set', 'grow_pct']
+const CHANGE_TYPES: readonly ContributionChangeType[] = ['set', 'grow_pct', 'annual_bonus']
 
 function isOwner(v: unknown): v is AccountOwner {
   return typeof v === 'string' && (OWNERS as readonly string[]).includes(v)

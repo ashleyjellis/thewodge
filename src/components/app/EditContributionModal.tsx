@@ -24,6 +24,11 @@ export function EditContributionModal({
   defaultOwner,
   defaultPotCategory,
   defaultYear,
+  defaultChangeType = 'set',
+  /** true when opened for a specific, already-known row (e.g. from the
+   *  Contributions breakdown) — owner/pot/year show as fixed context
+   *  instead of re-selectable, since re-picking them would be redundant */
+  lockOwnerPotYear = false,
   onSave,
   onClose,
 }: {
@@ -32,6 +37,8 @@ export function EditContributionModal({
   defaultOwner: AccountOwner
   defaultPotCategory: PotCategory
   defaultYear: number
+  defaultChangeType?: ContributionChangeType
+  lockOwnerPotYear?: boolean
   onSave: (input: {
     owner: AccountOwner
     potCategory: PotCategory
@@ -46,11 +53,14 @@ export function EditContributionModal({
     ...(people[1] ? [{ value: 'person_b' as const, label: people[1].name }] : []),
     { value: 'joint', label: 'Joint' },
   ]
+  const ownerLabel = ownerOptions.find((o) => o.value === defaultOwner)?.label ?? defaultOwner
 
   const [owner, setOwner] = useState<AccountOwner>(defaultOwner)
   const [potCategory, setPotCategory] = useState<PotCategory>(defaultPotCategory)
   const [effectiveYear, setEffectiveYear] = useState(String(defaultYear))
-  const [changeType, setChangeType] = useState<ContributionChangeType>('set')
+  const [changeType, setChangeType] = useState<ContributionChangeType>(
+    defaultChangeType === 'annual_bonus' ? 'set' : defaultChangeType,
+  )
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -74,25 +84,34 @@ export function EditContributionModal({
 
   return (
     <Modal title="Change a future contribution" onClose={onClose}>
-      <div className="grid grid-cols-2 gap-3">
-        <AppSelect
-          label="Whose"
-          value={owner}
-          onChange={(v) => setOwner(v as AccountOwner)}
-          options={ownerOptions}
-        />
-        <AppSelect
-          label="Pot"
-          value={potCategory}
-          onChange={(v) => setPotCategory(v as PotCategory)}
-          options={Object.entries(POT_LABELS).map(([value, label]) => ({ value, label }))}
-        />
-        <AppSelect
-          label="From year"
-          value={effectiveYear}
-          onChange={setEffectiveYear}
-          options={years.map((y) => ({ value: String(y), label: String(y) }))}
-        />
+      {lockOwnerPotYear ? (
+        <p className="text-[13px] text-muted-foreground">
+          {ownerLabel} — {POT_LABELS[defaultPotCategory]}, from {defaultYear}
+        </p>
+      ) : null}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        {lockOwnerPotYear ? null : (
+          <>
+            <AppSelect
+              label="Whose"
+              value={owner}
+              onChange={(v) => setOwner(v as AccountOwner)}
+              options={ownerOptions}
+            />
+            <AppSelect
+              label="Pot"
+              value={potCategory}
+              onChange={(v) => setPotCategory(v as PotCategory)}
+              options={Object.entries(POT_LABELS).map(([value, label]) => ({ value, label }))}
+            />
+            <AppSelect
+              label="From year"
+              value={effectiveYear}
+              onChange={setEffectiveYear}
+              options={years.map((y) => ({ value: String(y), label: String(y) }))}
+            />
+          </>
+        )}
         <AppSelect
           label="How"
           value={changeType}

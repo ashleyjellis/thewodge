@@ -312,6 +312,7 @@ function Forecast() {
           pot={planPot}
           onPotChange={setPlanPot}
           people={people}
+          accounts={accounts}
           defaultOwner={planDefaultOwner}
           investedRate={household.realReturn}
           cashRate={household.cashReturn}

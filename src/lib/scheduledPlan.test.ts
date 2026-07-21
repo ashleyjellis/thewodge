@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildScheduledPlan,
   projectScheduledYearly,
+  resolveAnnualBonusSchedule,
+  resolveContributionBreakdown,
   resolveMonthlySchedule,
   type ContributionChange,
   type OwnerScopedContributionChange,
@@ -56,6 +58,58 @@ describe('resolveMonthlySchedule', () => {
     ]
     const schedule = resolveMonthlySchedule(100, changes, 2026, 2026)
     expect(schedule.get(2026)).toBe(0)
+  })
+
+  it('ignores annual_bonus changes entirely — they never leak into the monthly figure', () => {
+    const changes: ContributionChange[] = [
+      { potCategory: 'investments', effectiveYear: 2026, changeType: 'annual_bonus', value: 5_000 },
+    ]
+    const schedule = resolveMonthlySchedule(500, changes, 2026, 2026)
+    expect(schedule.get(2026)).toBe(500) // unaffected by the £5,000 bonus change
+  })
+})
+
+describe('resolveAnnualBonusSchedule', () => {
+  it('is 0 before any annual_bonus change exists', () => {
+    const schedule = resolveAnnualBonusSchedule([], 2026, 2028)
+    expect([...schedule.values()]).toEqual([0, 0, 0])
+  })
+
+  it('applies from its effective year onward, flat — never compounding like grow_pct', () => {
+    const changes: ContributionChange[] = [
+      { potCategory: 'investments', effectiveYear: 2027, changeType: 'annual_bonus', value: 2_000 },
+    ]
+    const schedule = resolveAnnualBonusSchedule(changes, 2026, 2029)
+    expect(schedule.get(2026)).toBe(0)
+    expect(schedule.get(2027)).toBe(2_000)
+    expect(schedule.get(2028)).toBe(2_000) // same £2,000 every year, not growing
+    expect(schedule.get(2029)).toBe(2_000)
+  })
+
+  it('a later bonus change supersedes an earlier one', () => {
+    const changes: ContributionChange[] = [
+      { potCategory: 'investments', effectiveYear: 2026, changeType: 'annual_bonus', value: 2_000 },
+      { potCategory: 'investments', effectiveYear: 2028, changeType: 'annual_bonus', value: 3_500 },
+    ]
+    const schedule = resolveAnnualBonusSchedule(changes, 2026, 2029)
+    expect(schedule.get(2027)).toBe(2_000)
+    expect(schedule.get(2028)).toBe(3_500)
+  })
+
+  it('ignores set/grow_pct changes entirely — only annual_bonus feeds this schedule', () => {
+    const changes: ContributionChange[] = [
+      { potCategory: 'investments', effectiveYear: 2026, changeType: 'set', value: 900 },
+      { potCategory: 'investments', effectiveYear: 2026, changeType: 'grow_pct', value: 0.05 },
+    ]
+    const schedule = resolveAnnualBonusSchedule(changes, 2026, 2026)
+    expect(schedule.get(2026)).toBe(0)
+  })
+
+  it('never returns a negative bonus', () => {
+    const changes: ContributionChange[] = [
+      { potCategory: 'investments', effectiveYear: 2026, changeType: 'annual_bonus', value: -500 },
+    ]
+    expect(resolveAnnualBonusSchedule(changes, 2026, 2026).get(2026)).toBe(0)
   })
 })
 
@@ -167,6 +221,32 @@ describe('projectScheduledYearly', () => {
       )
     }
   })
+
+  it('an annual bonus is folded into contribution, arriving as a lump with no growth of its own that year', () => {
+    const changes: ContributionChange[] = [
+      { potCategory: 'investments', effectiveYear: 2027, changeType: 'annual_bonus', value: 3_000 },
+    ]
+    const points = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 32,
+      pots: basePots,
+      changes,
+      events: [],
+    })
+    const y1 = points.find((p) => p.calendarYear === 2027)!
+    expect(y1.investments.contribution).toBe(6_000 + 3_000) // £500/mo × 12 + the £3,000 bonus
+    const withoutBonusYear = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 32,
+      pots: basePots,
+      changes: [],
+      events: [],
+    }).find((p) => p.calendarYear === 2027)!
+    expect(y1.investments.growth).toBeCloseTo(withoutBonusYear.investments.growth, 5) // same market growth either way
+    expect(y1.investments.endValue).toBeCloseTo(withoutBonusYear.investments.endValue + 3_000, 5)
+  })
 })
 
 describe('buildScheduledPlan', () => {
@@ -269,5 +349,57 @@ describe('buildScheduledPlan', () => {
     const y1 = result.find((p) => p.calendarYear === 2027)!
     expect(y1.investments.growth).toBeGreaterThan(0)
     expect(y1.cash.growth).toBe(0) // 0% cash rate — no growth at all
+  })
+})
+
+describe('resolveContributionBreakdown', () => {
+  const accounts: ScheduledPlanAccount[] = [
+    { owner: 'person_a', potCategory: 'pension', monthlyContribution: 516, currentBalance: 45_458 },
+    { owner: 'person_a', potCategory: 'investments', monthlyContribution: 25, currentBalance: 1_189 },
+    { owner: 'person_b', potCategory: 'investments', monthlyContribution: 1_950, currentBalance: 27_982 },
+    { owner: 'joint', potCategory: 'cash', monthlyContribution: 500, currentBalance: 9_602 },
+  ]
+
+  it('returns one row per (owner, pot) that actually has an account — not all six possible combinations', () => {
+    const rows = resolveContributionBreakdown({ year: 2026, accounts, changes: [] })
+    expect(rows).toHaveLength(4)
+    expect(rows.some((r) => r.owner === 'person_a' && r.potCategory === 'cash')).toBe(false) // no such account
+  })
+
+  it('reflects each account\'s base monthly figure when there are no changes yet', () => {
+    const rows = resolveContributionBreakdown({ year: 2026, accounts, changes: [] })
+    const personAInvestments = rows.find((r) => r.owner === 'person_a' && r.potCategory === 'investments')!
+    expect(personAInvestments.monthly).toBe(25)
+    expect(personAInvestments.annualBonus).toBe(0)
+  })
+
+  it("one owner's change never leaks into another owner's row for the same pot", () => {
+    const changes: OwnerScopedContributionChange[] = [
+      { owner: 'person_b', potCategory: 'investments', effectiveYear: 2026, changeType: 'set', value: 2_500 },
+    ]
+    const rows = resolveContributionBreakdown({ year: 2026, accounts, changes })
+    expect(rows.find((r) => r.owner === 'person_b' && r.potCategory === 'investments')!.monthly).toBe(2_500)
+    expect(rows.find((r) => r.owner === 'person_a' && r.potCategory === 'investments')!.monthly).toBe(25) // untouched
+  })
+
+  it('surfaces monthly and annual bonus for the same row independently', () => {
+    const changes: OwnerScopedContributionChange[] = [
+      { owner: 'joint', potCategory: 'cash', effectiveYear: 2026, changeType: 'set', value: 600 },
+      { owner: 'joint', potCategory: 'cash', effectiveYear: 2026, changeType: 'annual_bonus', value: 1_500 },
+    ]
+    const rows = resolveContributionBreakdown({ year: 2026, accounts, changes })
+    const jointCash = rows.find((r) => r.owner === 'joint' && r.potCategory === 'cash')!
+    expect(jointCash.monthly).toBe(600)
+    expect(jointCash.annualBonus).toBe(1_500)
+  })
+
+  it('resolves a future year through the schedule, same as the main projection would', () => {
+    const changes: OwnerScopedContributionChange[] = [
+      { owner: 'person_a', potCategory: 'investments', effectiveYear: 2028, changeType: 'set', value: 100 },
+    ]
+    const rows2027 = resolveContributionBreakdown({ year: 2027, accounts, changes })
+    const rows2028 = resolveContributionBreakdown({ year: 2028, accounts, changes })
+    expect(rows2027.find((r) => r.owner === 'person_a' && r.potCategory === 'investments')!.monthly).toBe(25)
+    expect(rows2028.find((r) => r.owner === 'person_a' && r.potCategory === 'investments')!.monthly).toBe(100)
   })
 })
