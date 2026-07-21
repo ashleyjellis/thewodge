@@ -28,8 +28,12 @@ import type { AccountOwner } from './accountOwner.js'
 
 export type PotCategory = 'pension' | 'investments' | 'cash'
 
-/** The table's pot filter — 'total' is the whole household, combined. */
-export type PotFilter = PotCategory | 'total'
+/** The table's pot filter — 'total' is the whole household, combined;
+ *  'savingsAndInvestments' is cash + investments together, excluding
+ *  pension (the restructure brief's five-slice taxonomy: Total / Savings /
+ *  Investments / Pension / Savings + Investments, applied identically
+ *  everywhere a pot filter appears). */
+export type PotFilter = PotCategory | 'total' | 'savingsAndInvestments'
 
 /** The page's owner filter — 'total' is the whole household, combined. */
 export type OwnerFilter = 'total' | AccountOwner
@@ -222,16 +226,33 @@ export function yearlyByCalendarYear(yearly: YearPoint[], createdAt: string): Ma
   return map
 }
 
+function sumPotPoints(a: PotYearPoint, b: PotYearPoint): PotYearPoint {
+  return {
+    startValue: a.startValue + b.startValue,
+    contribution: a.contribution + b.contribution,
+    growth: a.growth + b.growth,
+    endValue: a.endValue + b.endValue,
+  }
+}
+
 /** Picks the pot's own start/contribution/growth/end out of a YearPoint. */
 export function potPoint(point: YearPoint, pot: PotFilter): PotYearPoint {
   if (pot === 'pension') return point.pension
   if (pot === 'investments') return point.stocks
   if (pot === 'cash') return point.cash
+  if (pot === 'savingsAndInvestments') return sumPotPoints(point.stocks, point.cash)
   return point.total
 }
 
-function accountsInPot<A extends { potCategory: PotCategory }>(accounts: A[], pot: PotFilter): A[] {
-  return pot === 'total' ? accounts : accounts.filter((a) => a.potCategory === pot)
+/** Filters accounts down to one pot-filter slice — the shared taxonomy's
+ *  filtering rule, reused by every screen with a pot filter (Growth's
+ *  balance/history filtering included) so 'total'/'savingsAndInvestments'
+ *  never drift into a screen-specific reimplementation. */
+export function accountsInPot<A extends { potCategory: PotCategory }>(accounts: A[], pot: PotFilter): A[] {
+  if (pot === 'total') return accounts
+  if (pot === 'savingsAndInvestments')
+    return accounts.filter((a) => a.potCategory === 'investments' || a.potCategory === 'cash')
+  return accounts.filter((a) => a.potCategory === pot)
 }
 
 export type PotScenario = {
@@ -256,8 +277,15 @@ export type PotScenario = {
  * investments (the household's usual flex lever, matching forecast()'s
  * default so a page that's never touched the pot filter sees no change)
  * but reports the household total rather than just that one pot.
+ * Deliberately excludes 'savingsAndInvestments' — this tool varies exactly
+ * one lever at a time, and "vary both pots at once" has no single
+ * unambiguous meaning, so callers can't even pass it (see PotFilter).
  */
-export function buildPotScenarios(input: ForecastInput, a: Assumptions, pot: PotFilter): PotScenario[] {
+export function buildPotScenarios(
+  input: ForecastInput,
+  a: Assumptions,
+  pot: Exclude<PotFilter, 'savingsAndInvestments'>,
+): PotScenario[] {
   const months = monthsToTarget(input.age, a.targetAge)
   const mInv = monthlyRate(a.investedRate)
   const mCash = monthlyRate(a.cashRate)

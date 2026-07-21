@@ -15,6 +15,7 @@ const POT_FILTERS: { value: PotFilter; label: string }[] = [
   { value: 'cash', label: 'Savings' },
   { value: 'investments', label: 'Investments' },
   { value: 'pension', label: 'Pension' },
+  { value: 'savingsAndInvestments', label: 'Savings + Investments' },
 ]
 
 function cell(value: number | null, className?: string, divider?: boolean) {

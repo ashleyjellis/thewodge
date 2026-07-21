@@ -38,7 +38,9 @@ const forecastSeo = seo({
   path: '/app/forecast',
 })
 
-const POT_FILTERS: { value: PotFilter; label: string }[] = [
+/** The scenarios table varies exactly one lever at a time, so it never
+ *  offers the combined "Savings + Investments" pot — see buildPotScenarios. */
+const SCENARIO_POT_FILTERS: { value: Exclude<PotFilter, 'savingsAndInvestments'>; label: string }[] = [
   { value: 'total', label: 'Total' },
   { value: 'cash', label: 'Savings' },
   { value: 'investments', label: 'Investments' },
@@ -75,7 +77,7 @@ function Forecast() {
 
   const [owner, setOwner] = useState<OwnerFilter>('total')
   const [pot, setPot] = useState<PotFilter>('total')
-  const [scenariosPot, setScenariosPot] = useState<PotFilter>('total')
+  const [scenariosPot, setScenariosPot] = useState<Exclude<PotFilter, 'savingsAndInvestments'>>('total')
   const [planPot, setPlanPot] = useState<PotFilter>('total')
   const [replanning, setReplanning] = useState(false)
   const [note, setNote] = useState('')
@@ -295,7 +297,7 @@ function Forecast() {
             </p>
           </div>
           <div className="flex flex-wrap gap-1">
-            {POT_FILTERS.map((p) => (
+            {SCENARIO_POT_FILTERS.map((p) => (
               <FilterPill key={p.value} active={scenariosPot === p.value} onClick={() => setScenariosPot(p.value)}>
                 {p.label}
               </FilterPill>
@@ -309,7 +311,7 @@ function Forecast() {
                 <th className="pb-2 font-medium">Choice</th>
                 <th className="pb-2 text-right font-medium">To {scenariosPotLabel}</th>
                 <th className="pb-2 text-right font-medium">
-                  {scenariosPot === 'total' ? 'Total' : POT_FILTERS.find((p) => p.value === scenariosPot)?.label} at{' '}
+                  {scenariosPot === 'total' ? 'Total' : SCENARIO_POT_FILTERS.find((p) => p.value === scenariosPot)?.label} at{' '}
                   {result.targetAge}
                 </th>
               </tr>

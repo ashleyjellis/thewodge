@@ -13,6 +13,7 @@ import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
 import type { AccountOwner } from '@/lib/accountOwner'
+import { accountsInPot, type PotFilter } from '@/lib/householdForecast'
 import { hasBeenUpdated, rollupSnapshotsByYear, totalGrowth } from '@/lib/snapshotMath'
 import { money, monthYear } from '@/lib/format'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
@@ -35,13 +36,13 @@ export const Route = createFileRoute('/app/growth')({
   component: Growth,
 })
 
-const POT_LABELS: Record<'pension' | 'investments' | 'cash', string> = {
-  pension: 'Pension',
-  investments: 'Investments',
-  cash: 'Cash',
-}
-const POT_FILTERS = ['all', 'pension', 'investments', 'cash'] as const
-type PotFilter = (typeof POT_FILTERS)[number]
+const POT_FILTERS: { value: PotFilter; label: string }[] = [
+  { value: 'total', label: 'Total' },
+  { value: 'cash', label: 'Savings' },
+  { value: 'investments', label: 'Investments' },
+  { value: 'pension', label: 'Pension' },
+  { value: 'savingsAndInvestments', label: 'Savings + Investments' },
+]
 
 function Growth() {
   const {
@@ -63,7 +64,7 @@ function Growth() {
   } = useSnapshots(household?.id ?? null)
 
   const [ownerFilter, setOwnerFilter] = useState<AccountOwner | 'all'>('all')
-  const [potFilter, setPotFilter] = useState<PotFilter>('all')
+  const [potFilter, setPotFilter] = useState<PotFilter>('total')
   const [view, setView] = useState<'monthly' | 'annual'>('monthly')
   const [updating, setUpdating] = useState(false)
 
@@ -89,10 +90,9 @@ function Growth() {
     { value: 'joint' as const, label: 'Joint' },
   ]
 
-  const filteredAccounts = accounts.filter(
-    (a) =>
-      (ownerFilter === 'all' || a.owner === ownerFilter) &&
-      (potFilter === 'all' || a.potCategory === potFilter),
+  const filteredAccounts = accountsInPot(
+    accounts.filter((a) => ownerFilter === 'all' || a.owner === ownerFilter),
+    potFilter,
   )
   const filteredIds = new Set(filteredAccounts.map((a) => a.id))
   const filteredSnapshots = snapshots.filter((s) => filteredIds.has(s.accountId))
@@ -158,8 +158,8 @@ function Growth() {
             ))}
             <span className="mx-1 h-4 w-px bg-border" />
             {POT_FILTERS.map((p) => (
-              <FilterPill key={p} active={potFilter === p} onClick={() => setPotFilter(p)}>
-                {p === 'all' ? 'All pots' : POT_LABELS[p]}
+              <FilterPill key={p.value} active={potFilter === p.value} onClick={() => setPotFilter(p.value)}>
+                {p.label}
               </FilterPill>
             ))}
           </div>

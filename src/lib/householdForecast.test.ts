@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  accountsInPot,
   actualTotalAsOf,
   aggregateHouseholdState,
   buildForecastYearRows,
@@ -7,6 +8,7 @@ import {
   canForecast,
   isValidFrozenState,
   ownerStateToForecastInput,
+  potPoint,
   varianceLabel,
   yearlyByCalendarYear,
   type AggregatableAccount,
@@ -294,6 +296,56 @@ describe('isValidFrozenState', () => {
   })
 })
 
+describe('potPoint', () => {
+  const point = {
+    year: 0,
+    age: 36,
+    pension: { startValue: 100, contribution: 10, growth: 5, endValue: 115 },
+    stocks: { startValue: 200, contribution: 20, growth: 15, endValue: 235 },
+    cash: { startValue: 50, contribution: 5, growth: 1, endValue: 56 },
+    total: { startValue: 350, contribution: 35, growth: 21, endValue: 406 },
+  }
+
+  it('picks each single pot straight off the point', () => {
+    expect(potPoint(point, 'pension')).toEqual(point.pension)
+    expect(potPoint(point, 'investments')).toEqual(point.stocks)
+    expect(potPoint(point, 'cash')).toEqual(point.cash)
+    expect(potPoint(point, 'total')).toEqual(point.total)
+  })
+
+  it("'savingsAndInvestments' sums stocks + cash field by field, excluding pension", () => {
+    expect(potPoint(point, 'savingsAndInvestments')).toEqual({
+      startValue: 250,
+      contribution: 25,
+      growth: 16,
+      endValue: 291,
+    })
+  })
+})
+
+describe('accountsInPot', () => {
+  const accounts = [
+    acc({ potCategory: 'pension' }),
+    acc({ potCategory: 'investments' }),
+    acc({ potCategory: 'cash' }),
+  ]
+
+  it("'total' returns every account", () => {
+    expect(accountsInPot(accounts, 'total')).toHaveLength(3)
+  })
+
+  it('a single pot returns only that pot', () => {
+    expect(accountsInPot(accounts, 'pension')).toHaveLength(1)
+    expect(accountsInPot(accounts, 'pension')[0]!.potCategory).toBe('pension')
+  })
+
+  it("'savingsAndInvestments' returns investments + cash, never pension", () => {
+    const result = accountsInPot(accounts, 'savingsAndInvestments')
+    expect(result).toHaveLength(2)
+    expect(result.map((a) => a.potCategory).sort()).toEqual(['cash', 'investments'])
+  })
+})
+
 describe('yearlyByCalendarYear', () => {
   it('re-indexes years-from-creation onto real calendar years', () => {
     const yearly = projectYearly(
@@ -389,6 +441,21 @@ describe('buildForecastYearRows', () => {
       pot: 'pension',
     })
     expect(rows.find((r) => r.calendarYear === 2026)!.forecastValue).toBe(20_000) // pension only, not the 8k stocks too
+  })
+
+  it("'savingsAndInvestments' combines stocks + cash, excluding pension", () => {
+    const rows = buildForecastYearRows({
+      planYearly: plan,
+      planCreatedAt: '2026-01-01T00:00:00.000Z',
+      originalYearly: null,
+      originalCreatedAt: null,
+      hasReplanned: false,
+      accounts: [],
+      snapshots: [],
+      currentCalendarYear: 2026,
+      pot: 'savingsAndInvestments',
+    })
+    expect(rows.find((r) => r.calendarYear === 2026)!.forecastValue).toBe(8_000) // stocks(8k) + cash(0), not pension's 20k
   })
 
   it('actualValue is null for a calendar year that has not happened yet', () => {

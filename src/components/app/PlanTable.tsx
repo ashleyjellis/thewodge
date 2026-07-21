@@ -14,6 +14,7 @@ import {
   type ContributionBreakdownRow,
   type ContributionChangeType,
   type ScheduledPlanAccount,
+  type ScheduledPotYearPoint,
   type ScheduledYearPoint,
 } from '@/lib/scheduledPlan'
 import { money, percent } from '@/lib/format'
@@ -29,12 +30,24 @@ const POT_FILTERS: { value: PotFilter; label: string }[] = [
   { value: 'cash', label: 'Savings' },
   { value: 'investments', label: 'Investments' },
   { value: 'pension', label: 'Pension' },
+  { value: 'savingsAndInvestments', label: 'Savings + Investments' },
 ]
 
-function potPoint(point: ScheduledYearPoint, pot: PotFilter) {
+function potPoint(point: ScheduledYearPoint, pot: PotFilter): ScheduledPotYearPoint {
   if (pot === 'pension') return point.pension
   if (pot === 'investments') return point.investments
   if (pot === 'cash') return point.cash
+  if (pot === 'savingsAndInvestments') {
+    const inv = point.investments
+    const cash = point.cash
+    return {
+      startValue: inv.startValue + cash.startValue,
+      contribution: inv.contribution + cash.contribution,
+      events: inv.events + cash.events,
+      growth: inv.growth + cash.growth,
+      endValue: inv.endValue + cash.endValue,
+    }
+  }
   return point.total
 }
 
@@ -90,15 +103,21 @@ export function PlanTable({
   const columns = points.slice(1, 1 + horizon)
   if (columns.length === 0) return null
 
-  const pots: ('pension' | 'investments' | 'cash')[] =
-    pot === 'total' ? ['pension', 'investments', 'cash'] : [pot]
+  const pots: PotCategory[] =
+    pot === 'total'
+      ? ['pension', 'investments', 'cash']
+      : pot === 'savingsAndInvestments'
+        ? ['investments', 'cash']
+        : [pot]
   const eventsInView = plannedEvents.filter(
     (e) => pots.includes(e.potCategory) && columns.some((c) => c.calendarYear === e.year),
   )
   const eventsTotal = eventsInView.reduce((s, e) => s + e.amount, 0)
   const thisYearMonthly = potPoint(columns[0]!, pot).contribution / 12
   const rateLabel =
-    pot === 'total' ? `Invested ${percent(investedRate)} · Cash ${percent(cashRate)}` : percent(pot === 'cash' ? cashRate : investedRate)
+    pot === 'total' || pot === 'savingsAndInvestments'
+      ? `Invested ${percent(investedRate)} · Cash ${percent(cashRate)}`
+      : percent(pot === 'cash' ? cashRate : investedRate)
 
   const row = (label: string, cell: (c: ScheduledYearPoint) => string, opts?: { bold?: boolean }) => (
     <tr className="border-t border-border">
@@ -303,7 +322,7 @@ export function PlanTable({
           people={people}
           years={columns.map((c) => c.calendarYear)}
           defaultOwner={defaultOwner}
-          defaultPotCategory={pot === 'total' ? 'investments' : pot}
+          defaultPotCategory={pot === 'total' || pot === 'savingsAndInvestments' ? 'investments' : pot}
           defaultYear={addingEventYear}
           onSave={onAddPlannedEvent}
           onClose={() => setAddingEventYear(null)}
