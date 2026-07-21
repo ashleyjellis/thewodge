@@ -107,7 +107,6 @@ function AccountsPage() {
         accountType: payload.accountType,
         isRingFenced: payload.isRingFenced,
         isGoalEarmarked: payload.isGoalEarmarked,
-        monthlyContribution: payload.monthlyContribution,
         ...(payload.openingBalance !== undefined
           ? { openingBalance: payload.openingBalance }
           : {}),
@@ -219,7 +218,6 @@ function AccountsPage() {
                 accountType: editingAccount.accountType,
                 isRingFenced: editingAccount.isRingFenced,
                 isGoalEarmarked: editingAccount.isGoalEarmarked,
-                monthlyContribution: String(editingAccount.monthlyContribution || ''),
               }}
               onSubmit={saveAccount}
               onCancel={() => setEditingAccountId(null)}

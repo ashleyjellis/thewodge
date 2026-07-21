@@ -1,7 +1,8 @@
 /**
  * A single account's display row — pot-category dot (navy=pension, accent=
  * investments, muted=cash, matching the free tool's tone system), provider +
- * type, balance + monthly contribution. Clickable to edit.
+ * type, balance. Clickable to edit. No monthly contribution here — that
+ * figure belongs to the Forecast Plan table now, not this structural view.
  */
 import { money } from '@/lib/format'
 import { ACCOUNT_TYPE_LABELS } from '@/lib/accountType'
@@ -44,11 +45,6 @@ export function AccountRow({ account, onClick }: { account: Account; onClick: ()
         <div className="text-[14px] font-semibold tabular-nums text-foreground">
           {account.currentBalance !== null ? money(account.currentBalance) : '—'}
         </div>
-        {account.monthlyContribution > 0 ? (
-          <div className="text-[12px] tabular-nums text-muted-foreground">
-            {money(account.monthlyContribution)}/mo
-          </div>
-        ) : null}
       </div>
     </button>
   )
