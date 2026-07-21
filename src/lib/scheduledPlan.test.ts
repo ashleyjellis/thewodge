@@ -187,6 +187,37 @@ describe('projectScheduledYearly', () => {
     expect(y1.cash.growth).toBeCloseTo(cashGrowthOnly, 5)
   })
 
+  it('a planned event compounds from its own year, not just the years after', () => {
+    // the bug this fixed: a deposit used to earn zero growth in its own year
+    // because it was added to the balance after that year's growth was
+    // already calculated on the pre-event amount
+    const withoutEvent = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 31,
+      pots: basePots,
+      changes: [],
+      events: [],
+    })
+    const withEvent = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 31,
+      pots: basePots,
+      changes: [],
+      events: [{ potCategory: 'cash', year: 2027, amount: 10_000 }],
+    })
+    const y1NoEvent = withoutEvent.find((p) => p.calendarYear === 2027)!
+    const y1WithEvent = withEvent.find((p) => p.calendarYear === 2027)!
+    // the £10k itself grows for the full year, on top of the growth the
+    // pre-existing balance was already going to earn
+    expect(y1WithEvent.cash.growth).toBeGreaterThan(y1NoEvent.cash.growth + 10_000 * 0.04)
+    // and endValue reflects a full year of compounding on the deposit too —
+    // not just the deposit sitting there flat
+    const growthAttributableToDeposit = y1WithEvent.cash.endValue - y1NoEvent.cash.endValue
+    expect(growthAttributableToDeposit).toBeGreaterThan(10_000)
+  })
+
   it('a negative planned event (a withdrawal) never drives a pot below zero', () => {
     const events: PlannedEvent[] = [{ potCategory: 'cash', year: 2027, amount: -50_000 }]
     const points = projectScheduledYearly({

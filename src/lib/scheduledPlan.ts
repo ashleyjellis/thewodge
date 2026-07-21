@@ -156,13 +156,17 @@ function eventsFor(events: PlannedEvent[], pot: PotCategory, calendarYear: numbe
 /**
  * Year-by-year projection with a live contribution schedule and planned
  * events layered on top, one pot at a time, then combined into a total.
- * Each year's growth is the market's share only — endBeforeEvents − start −
- * (monthly contribution) — matching this codebase's rule everywhere else
- * that a non-growth cash movement is never folded into a growth figure. An
- * annual bonus is money in the same sense as the monthly contribution (it's
- * folded into `contribution`, not `events`), but — like a planned event —
- * arrives as a lump with no growth of its own that same year, rather than
- * compounding monthly.
+ * A planned event (a signed one-off — deposit or withdrawal) is applied to
+ * the pot's balance at the start of its year, before that year's growth is
+ * calculated, so a withdrawal loses its own year's growth too, not just
+ * every year after — the £ withdrawn is simply never in the pot compounding
+ * from that point on. Each year's growth is still the market's share only —
+ * excluding the event and excluding the monthly contribution — matching
+ * this codebase's rule everywhere else that a non-growth cash movement is
+ * never folded into a growth figure. An annual bonus is money in the same
+ * sense as the monthly contribution (it's folded into `contribution`, not
+ * `events`), but arrives as a lump with no growth of its own that same
+ * year, rather than compounding monthly.
  */
 export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYearPoint[] {
   const years = Math.max(0, Math.round(input.targetAge - input.age))
@@ -223,16 +227,22 @@ export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYear
       const monthly = schedules[pot].get(calendarYear) ?? 0
       const bonus = bonusSchedules[pot].get(calendarYear) ?? 0
       const m = monthlyRate(input.pots[pot].rate)
-      const beforeLumpSums = futureValueLump(start, m, 12) + futureValueContributions(monthly, m, 12)
-      const contribution = monthly * 12 + bonus
+      // a planned event lands at the start of its year, not the end — it must
+      // change what that year's own growth compounds on, not just future
+      // years' (see the scheduledPlan.test.ts case this fixed: a withdrawal
+      // used to earn a full year of growth on the withdrawn amount before
+      // being subtracted)
       const eventDelta = eventsFor(input.events, pot, calendarYear)
-      const end = Math.max(0, beforeLumpSums + bonus + eventDelta)
+      const adjustedStart = Math.max(0, start + eventDelta)
+      const beforeLumpSums = futureValueLump(adjustedStart, m, 12) + futureValueContributions(monthly, m, 12)
+      const contribution = monthly * 12 + bonus
+      const end = Math.max(0, beforeLumpSums + bonus)
 
       potPoints[pot] = {
         startValue: start,
         contribution,
         events: eventDelta,
-        growth: beforeLumpSums - start - monthly * 12,
+        growth: beforeLumpSums - adjustedStart - monthly * 12,
         endValue: end,
       }
       balances[pot] = end
