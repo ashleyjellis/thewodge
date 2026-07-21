@@ -1,10 +1,16 @@
 /**
- * The Growth tab's "update balances" flow (spec §3) — the most important
- * interaction in the logged-in build. Update whenever you like, not
- * forced-monthly: leaving an account's balance blank skips it this round, only
- * accounts with a real end balance entered get a new snapshot on save.
- * money_in/transfer_out are pre-filled from the known monthly contribution and
- * labelled "estimated" until the user edits either — never applied silently.
+ * The Growth tab's "update balances" flow (spec §3, revised by the
+ * restructure brief) — the most important interaction in the logged-in
+ * build. Update whenever you like, not forced-monthly: leaving an
+ * account's balance blank skips it this round, only accounts with a real
+ * end balance entered get a new snapshot on save.
+ *
+ * Growth no longer collects a contribution figure — money_in is always
+ * computed from the account's known monthly contribution × months elapsed,
+ * never entered or confirmed here, so there's exactly one place a
+ * contribution amount can be set (the Forecast Plan table). The "put in /
+ * grew" split shown per account is a read-only preview of that same
+ * computation, not an editable field.
  */
 import { useState } from 'react'
 import { estimateContribution, latestSnapshotByAccount, monthsBetween } from '@/lib/snapshotMath'
@@ -27,21 +33,10 @@ const POT_TONE = { pension: 'you', investments: 'market', cash: 'cash' } as cons
 
 type RowState = {
   endBalance: string
-  moneyIn: string
-  transferOut: string
-  moneyInTouched: boolean
-  transferOutTouched: boolean
   note: string
 }
 
-const EMPTY_ROW: RowState = {
-  endBalance: '',
-  moneyIn: '',
-  transferOut: '',
-  moneyInTouched: false,
-  transferOutTouched: false,
-  note: '',
-}
+const EMPTY_ROW: RowState = { endBalance: '', note: '' }
 
 export function UpdateBalances({
   accounts,
@@ -64,41 +59,20 @@ export function UpdateBalances({
 
   const rowFor = (accountId: string): RowState => rows[accountId] ?? EMPTY_ROW
 
-  const setEndBalance = (account: UpdateableAccount, value: string) => {
-    setRows((prev) => {
-      const existing = prev[account.id]
-      const last = latest.get(account.id)
-      const estimate = last
-        ? estimateContribution(
-            account.monthlyContribution,
-            monthsBetween({ year: last.year, month: last.month }, todayPoint),
-          )
-        : { moneyIn: 0, transferOut: 0 }
-      return {
-        ...prev,
-        [account.id]: {
-          endBalance: value,
-          moneyIn: existing?.moneyInTouched ? existing.moneyIn : String(estimate.moneyIn),
-          transferOut: existing?.transferOutTouched ? existing.transferOut : String(estimate.transferOut),
-          moneyInTouched: existing?.moneyInTouched ?? false,
-          transferOutTouched: existing?.transferOutTouched ?? false,
-          note: existing?.note ?? '',
-        },
-      }
-    })
-  }
-
-  const setMoneyIn = (accountId: string, value: string) =>
-    setRows((prev) => ({ ...prev, [accountId]: { ...rowFor(accountId), moneyIn: value, moneyInTouched: true } }))
-
-  const setTransferOut = (accountId: string, value: string) =>
-    setRows((prev) => ({
-      ...prev,
-      [accountId]: { ...rowFor(accountId), transferOut: value, transferOutTouched: true },
-    }))
+  const setEndBalance = (accountId: string, value: string) =>
+    setRows((prev) => ({ ...prev, [accountId]: { ...rowFor(accountId), endBalance: value } }))
 
   const setNote = (accountId: string, value: string) =>
     setRows((prev) => ({ ...prev, [accountId]: { ...rowFor(accountId), note: value } }))
+
+  const contributionSince = (account: UpdateableAccount) => {
+    const last = latest.get(account.id)
+    if (!last) return { moneyIn: 0, transferOut: 0 }
+    return estimateContribution(
+      account.monthlyContribution,
+      monthsBetween({ year: last.year, month: last.month }, todayPoint),
+    )
+  }
 
   const touchedAccounts = accounts.filter((a) => rowFor(a.id).endBalance.trim() !== '')
 
@@ -110,15 +84,15 @@ export function UpdateBalances({
         const row = rowFor(account.id)
         const endBalance = Number(row.endBalance)
         const hasHistory = latest.has(account.id)
-        const moneyIn = hasHistory ? Number(row.moneyIn || '0') : 0
-        const transferOut = hasHistory ? Number(row.transferOut || '0') : 0
-        const isEstimated = hasHistory && !row.moneyInTouched && !row.transferOutTouched
+        const { moneyIn, transferOut } = hasHistory
+          ? contributionSince(account)
+          : { moneyIn: 0, transferOut: 0 }
         await postJson('/api/snapshots', {
           accountId: account.id,
           endBalance,
           moneyIn,
           transferOut,
-          isEstimated,
+          isEstimated: true,
           note: row.note,
         })
       }
@@ -144,6 +118,10 @@ export function UpdateBalances({
           const last = latest.get(account.id)
           const row = rowFor(account.id)
           const hasHistory = Boolean(last)
+          const endBalance = Number(row.endBalance)
+          const showPreview = hasHistory && row.endBalance.trim() !== '' && Number.isFinite(endBalance)
+          const { moneyIn } = contributionSince(account)
+          const growth = showPreview ? endBalance - (account.currentBalance ?? 0) - moneyIn : null
           return (
             <div key={account.id} className="rounded-2xl bg-muted/60 p-4">
               <div className="flex items-baseline gap-2.5">
@@ -171,28 +149,17 @@ export function UpdateBalances({
                   prefix="£"
                   inputMode="decimal"
                   value={row.endBalance}
-                  onChange={(v) => setEndBalance(account, v)}
+                  onChange={(v) => setEndBalance(account.id, v)}
                   placeholder={account.currentBalance !== null ? String(Math.round(account.currentBalance)) : '0'}
                 />
-                {hasHistory && row.endBalance.trim() !== '' ? (
-                  <>
-                    <AppField
-                      label="Money in"
-                      hint={row.moneyInTouched ? undefined : 'estimated'}
-                      prefix="£"
-                      inputMode="decimal"
-                      value={row.moneyIn}
-                      onChange={(v) => setMoneyIn(account.id, v)}
-                    />
-                    <AppField
-                      label="Money out"
-                      hint={row.transferOutTouched ? undefined : 'estimated'}
-                      prefix="£"
-                      inputMode="decimal"
-                      value={row.transferOut}
-                      onChange={(v) => setTransferOut(account.id, v)}
-                    />
-                  </>
+                {showPreview ? (
+                  <div className="flex flex-col justify-center gap-0.5 text-[13px] text-muted-foreground sm:col-span-2">
+                    <span>
+                      Put in {money(moneyIn)}{' '}
+                      <span className="text-[11px]">(from the account's contribution rate)</span>
+                    </span>
+                    <span>Grew {money(growth ?? 0)}</span>
+                  </div>
                 ) : null}
               </div>
               {row.endBalance.trim() !== '' ? (

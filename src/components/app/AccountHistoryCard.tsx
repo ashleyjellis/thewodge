@@ -3,6 +3,9 @@
  * contributions in period, market growth in period, end balance," as a calm
  * StatRow list rather than a dense grid. Periods are pre-computed by the caller
  * (raw snapshots for "monthly", rollupSnapshotsByYear() output for "annual").
+ * put-in/grew is always computed from the account's contribution rate, never
+ * user-entered (see UpdateBalances) — not flagged as "estimated" here, since
+ * that's simply how this figure works now, not a stand-in pending confirmation.
  */
 import { periodGrowth, type SnapshotLike } from '@/lib/snapshotMath'
 import { money } from '@/lib/format'
@@ -17,8 +20,7 @@ function periodSub(period: HistoryPeriod): string {
   const g = periodGrowth(period)
   const putIn = period.moneyIn !== null ? money(period.moneyIn) : 'unknown'
   const grew = g.growth !== null ? money(g.growth) : 'not available'
-  const estimated = period.isEstimated ? ' · estimated' : ''
-  return `put in ${putIn} · grew ${grew}${estimated}`
+  return `put in ${putIn} · grew ${grew}`
 }
 
 export function AccountHistoryCard({
