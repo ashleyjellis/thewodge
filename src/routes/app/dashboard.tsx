@@ -106,7 +106,11 @@ function Dashboard() {
 
       <PeopleStrip people={people} />
 
-      <MilestoneHeadline by40={by40} byRetirement={byRetirement} retirementAge={household.retirementAge} />
+      <MilestoneHeadline
+        by40={by40}
+        byRetirement={byRetirement}
+        retirementAge={totalResolved.assumptions.targetAge}
+      />
 
       <WealthByAccount
         accounts={accounts}

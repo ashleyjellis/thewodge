@@ -37,6 +37,10 @@ export type OwnerFilter = 'total' | AccountOwner
 export type PotTotals = {
   /** the age this slice's own projection is anchored to — see aggregateHouseholdState */
   age: number
+  /** this slice's own horizon — each person's own retirement age; total/joint
+   *  run to the later of the two people's own ages, expressed in the anchor
+   *  person's age-frame (see aggregateHouseholdState) */
+  targetAge: number
   pension: number
   stocks: number
   cash: number
@@ -54,7 +58,6 @@ export type PotTotals = {
  * person didn't exist yet at the time this was frozen.
  */
 export type FrozenForecastState = {
-  targetAge: number
   investedRate: number
   cashRate: number
   total: PotTotals
@@ -69,6 +72,7 @@ function isValidPotTotals(value: unknown): value is PotTotals {
   const v = value as Record<string, unknown>
   return (
     typeof v.age === 'number' &&
+    typeof v.targetAge === 'number' &&
     typeof v.pension === 'number' &&
     typeof v.stocks === 'number' &&
     typeof v.cash === 'number' &&
@@ -82,14 +86,14 @@ function isValidPotTotals(value: unknown): value is PotTotals {
  * Runtime shape check for a parsed forecast_snapshots.household_state_json.
  * Guards against a baseline stored under an earlier version of this shape
  * (e.g. a flat {age,pension,stocks,...} row from before the owner-filter
- * split) being silently misread — callers should treat an invalid state as
- * equivalent to "no baseline yet," never destructure it directly.
+ * split, or targetAge living at the top level from before per-person
+ * retirement ages) being silently misread — callers should treat an invalid
+ * state as equivalent to "no baseline yet," never destructure it directly.
  */
 export function isValidFrozenState(value: unknown): value is FrozenForecastState {
   if (!value || typeof value !== 'object') return false
   const v = value as Record<string, unknown>
-  if (typeof v.targetAge !== 'number' || typeof v.investedRate !== 'number' || typeof v.cashRate !== 'number')
-    return false
+  if (typeof v.investedRate !== 'number' || typeof v.cashRate !== 'number') return false
   if (!isValidPotTotals(v.total)) return false
   if (v.personA !== null && !isValidPotTotals(v.personA)) return false
   if (v.personB !== null && !isValidPotTotals(v.personB)) return false
@@ -124,13 +128,13 @@ export function ownerStateToForecastInput(
     assumptions: {
       investedRate: state.investedRate,
       cashRate: state.cashRate,
-      targetAge: state.targetAge,
+      targetAge: totals.targetAge,
     },
   }
 }
 
-export type AggregatableHousehold = { retirementAge: number; realReturn: number; cashReturn: number }
-export type AggregatablePerson = { age: number }
+export type AggregatableHousehold = { realReturn: number; cashReturn: number }
+export type AggregatablePerson = { age: number; retirementAge: number }
 export type AggregatableAccount = {
   owner: AccountOwner
   potCategory: PotCategory
@@ -146,13 +150,14 @@ export function canForecast(people: AggregatablePerson[], accounts: Aggregatable
   return people.length > 0 && accounts.length > 0
 }
 
-function potTotalsFor(accounts: AggregatableAccount[], age: number): PotTotals {
+function potTotalsFor(accounts: AggregatableAccount[], age: number, targetAge: number): PotTotals {
   const sumBalance = (pot: PotCategory) =>
     accounts.filter((a) => a.potCategory === pot).reduce((s, a) => s + (a.currentBalance ?? 0), 0)
   const sumMonthly = (pot: PotCategory) =>
     accounts.filter((a) => a.potCategory === pot).reduce((s, a) => s + a.monthlyContribution, 0)
   return {
     age,
+    targetAge,
     pension: sumBalance('pension'),
     stocks: sumBalance('investments'),
     cash: sumBalance('cash'),
@@ -163,14 +168,27 @@ function potTotalsFor(accounts: AggregatableAccount[], age: number): PotTotals {
 }
 
 /**
+ * The household-wide horizon when two people have different retirement
+ * ages: runs until the LATER of the two reaches their own target, expressed
+ * as an age in the anchor person's frame (anchorAge + that person's own
+ * longest remaining years-to-retirement) — matching the whole-picture
+ * principle rather than truncating the projection at whoever gets there
+ * first. Degenerates to that one person's own retirement age when there's
+ * only one person. Exported so scheduledPlan.ts's live projection resolves
+ * 'total'/'joint' the exact same way as this frozen one does.
+ */
+export function householdTargetAge(anchorAge: number, people: { age: number; retirementAge: number }[]): number {
+  const longestYearsToGo = Math.max(...people.map((p) => p.retirementAge - p.age))
+  return anchorAge + longestYearsToGo
+}
+
+/**
  * Aggregates live household state into the forecast engine's input shape —
  * one slice per owner filter, so a person's own forecast can be projected
- * from their own age, not the household's shared anchor. The household-wide
- * ('total') anchor age is the YOUNGER person's — the household's horizon
- * runs until the LATER of the two reaches the shared target retirement age,
- * matching the whole-picture principle rather than truncating the
- * projection at whoever gets there first. `people[0]` is person_a,
- * `people[1]` is person_b, matching accountOwner.ts's convention.
+ * from their own age and their own retirement age, not a shared household
+ * anchor. The household-wide ('total') anchor age is the YOUNGER person's;
+ * `people[0]` is person_a, `people[1]` is person_b, matching
+ * accountOwner.ts's convention.
  */
 export function aggregateHouseholdState(
   household: AggregatableHousehold,
@@ -178,15 +196,19 @@ export function aggregateHouseholdState(
   accounts: AggregatableAccount[],
 ): FrozenForecastState {
   const anchorAge = Math.min(...people.map((p) => p.age))
+  const totalTargetAge = householdTargetAge(anchorAge, people)
 
   return {
-    targetAge: household.retirementAge,
     investedRate: household.realReturn,
     cashRate: household.cashReturn,
-    total: potTotalsFor(accounts, anchorAge),
-    personA: people[0] ? potTotalsFor(accounts.filter((a) => a.owner === 'person_a'), people[0].age) : null,
-    personB: people[1] ? potTotalsFor(accounts.filter((a) => a.owner === 'person_b'), people[1].age) : null,
-    joint: potTotalsFor(accounts.filter((a) => a.owner === 'joint'), anchorAge),
+    total: potTotalsFor(accounts, anchorAge, totalTargetAge),
+    personA: people[0]
+      ? potTotalsFor(accounts.filter((a) => a.owner === 'person_a'), people[0].age, people[0].retirementAge)
+      : null,
+    personB: people[1]
+      ? potTotalsFor(accounts.filter((a) => a.owner === 'person_b'), people[1].age, people[1].retirementAge)
+      : null,
+    joint: potTotalsFor(accounts.filter((a) => a.owner === 'joint'), anchorAge, totalTargetAge),
   }
 }
 

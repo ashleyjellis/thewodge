@@ -10,6 +10,7 @@ import { AppField } from './AppField'
 export type PersonFormValues = {
   name: string
   age: string
+  retirementAge: string
   salary: string
   bonus: string
   employerPensionUserPct: string
@@ -21,6 +22,7 @@ export type PersonData = {
   id: string
   name: string
   age: number
+  retirementAge: number
   salary: number | null
   bonus: number | null
   employerPensionUserPct: number | null
@@ -31,6 +33,7 @@ export type PersonData = {
 const EMPTY: PersonFormValues = {
   name: '',
   age: '',
+  retirementAge: '60',
   salary: '',
   bonus: '',
   employerPensionUserPct: '',
@@ -44,6 +47,7 @@ function toFormValues(p: PersonData): PersonFormValues {
   return {
     name: p.name,
     age: String(p.age),
+    retirementAge: String(p.retirementAge),
     salary: s(p.salary),
     bonus: s(p.bonus),
     employerPensionUserPct: pct(p.employerPensionUserPct),
@@ -64,6 +68,7 @@ export function personFormToPayload(f: PersonFormValues) {
   return {
     name: f.name.trim(),
     age: n(f.age) ?? 0,
+    retirementAge: n(f.retirementAge) ?? 60,
     salary: n(f.salary),
     bonus: n(f.bonus),
     employerPensionUserPct: pctToFraction(f.employerPensionUserPct),
@@ -104,7 +109,9 @@ export function PersonCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-[16px] font-semibold tracking-tight">{person.name}</h3>
-            <p className="mt-1 text-[13px] text-muted-foreground">Age {person.age}</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Age {person.age} · Retiring at {person.retirementAge}
+            </p>
           </div>
           <button
             type="button"
@@ -139,6 +146,14 @@ export function PersonCard({
           value={values.age}
           onChange={set('age')}
           placeholder="36"
+          inputMode="numeric"
+        />
+        <AppField
+          label="Retirement age"
+          hint="what this person's forecast plans towards"
+          value={values.retirementAge}
+          onChange={set('retirementAge')}
+          placeholder="60"
           inputMode="numeric"
         />
         <AppField

@@ -27,18 +27,18 @@ describe('canForecast', () => {
     expect(canForecast([], [acc({ currentBalance: 100 })])).toBe(false)
   })
   it('is false with no accounts', () => {
-    expect(canForecast([{ age: 30 }], [])).toBe(false)
+    expect(canForecast([{ age: 30, retirementAge: 60 }], [])).toBe(false)
   })
   it('is true once both exist', () => {
-    expect(canForecast([{ age: 30 }], [acc({ currentBalance: 100 })])).toBe(true)
+    expect(canForecast([{ age: 30, retirementAge: 60 }], [acc({ currentBalance: 100 })])).toBe(true)
   })
 })
 
 describe('aggregateHouseholdState', () => {
-  const household = { retirementAge: 60, realReturn: 0.07, cashReturn: 0.045 }
+  const household = { realReturn: 0.07, cashReturn: 0.045 }
 
   it("sums the household TOTAL across every owner's balances and monthly contributions", () => {
-    const state = aggregateHouseholdState(household, [{ age: 36 }], [
+    const state = aggregateHouseholdState(household, [{ age: 36, retirementAge: 60 }], [
       acc({ owner: 'person_a', potCategory: 'pension', monthlyContribution: 500, currentBalance: 20_000 }),
       acc({ owner: 'person_a', potCategory: 'investments', monthlyContribution: 200, currentBalance: 5_000 }),
       acc({ owner: 'joint', potCategory: 'cash', monthlyContribution: 0, currentBalance: 12_000 }),
@@ -51,25 +51,48 @@ describe('aggregateHouseholdState', () => {
   })
 
   it('treats a null current_balance as zero', () => {
-    const state = aggregateHouseholdState(household, [{ age: 30 }], [
+    const state = aggregateHouseholdState(household, [{ age: 30, retirementAge: 60 }], [
       acc({ potCategory: 'pension', currentBalance: null }),
     ])
     expect(state.total.pension).toBe(0)
   })
 
   it("total's anchor age is the YOUNGER person's — the longer horizon", () => {
-    const state = aggregateHouseholdState(household, [{ age: 40 }, { age: 34 }], [acc({ currentBalance: 1_000 })])
+    const state = aggregateHouseholdState(
+      household,
+      [{ age: 40, retirementAge: 60 }, { age: 34, retirementAge: 60 }],
+      [acc({ currentBalance: 1_000 })],
+    )
     expect(state.total.age).toBe(34)
   })
 
-  it("splits balances by owner into personA/personB/joint, each with that person's OWN age", () => {
-    const state = aggregateHouseholdState(household, [{ age: 40 }, { age: 34 }], [
-      acc({ owner: 'person_a', potCategory: 'pension', currentBalance: 100_000 }),
-      acc({ owner: 'person_b', potCategory: 'pension', currentBalance: 40_000 }),
-      acc({ owner: 'joint', potCategory: 'cash', currentBalance: 5_000 }),
-    ])
+  it("total's target age runs to the LATER of the two people's own retirement ages", () => {
+    // person 0: 40 now, retires at 60 → 20 years to go
+    // person 1: 34 now, retires at 56 → 22 years to go (the longer one)
+    // total is anchored at the younger person's age (34), so it should run
+    // 22 years from there → 56, not 20 years to 54
+    const state = aggregateHouseholdState(
+      household,
+      [{ age: 40, retirementAge: 60 }, { age: 34, retirementAge: 56 }],
+      [acc({ currentBalance: 1_000 })],
+    )
+    expect(state.total.targetAge).toBe(56)
+    expect(state.joint.targetAge).toBe(56) // joint mirrors total — no person of its own
+  })
+
+  it("splits balances by owner into personA/personB/joint, each with that person's OWN age and retirement age", () => {
+    const state = aggregateHouseholdState(
+      household,
+      [{ age: 40, retirementAge: 60 }, { age: 34, retirementAge: 56 }],
+      [
+        acc({ owner: 'person_a', potCategory: 'pension', currentBalance: 100_000 }),
+        acc({ owner: 'person_b', potCategory: 'pension', currentBalance: 40_000 }),
+        acc({ owner: 'joint', potCategory: 'cash', currentBalance: 5_000 }),
+      ],
+    )
     expect(state.personA).toEqual({
       age: 40,
+      targetAge: 60,
       pension: 100_000,
       stocks: 0,
       cash: 0,
@@ -79,6 +102,7 @@ describe('aggregateHouseholdState', () => {
     })
     expect(state.personB).toEqual({
       age: 34,
+      targetAge: 56,
       pension: 40_000,
       stocks: 0,
       cash: 0,
@@ -91,13 +115,17 @@ describe('aggregateHouseholdState', () => {
   })
 
   it('personB is null when only one person exists', () => {
-    const state = aggregateHouseholdState(household, [{ age: 36 }], [acc({ currentBalance: 1 })])
+    const state = aggregateHouseholdState(household, [{ age: 36, retirementAge: 60 }], [acc({ currentBalance: 1 })])
     expect(state.personB).toBeNull()
   })
 
+  it("a solo household's total target age is just that person's own retirement age", () => {
+    const state = aggregateHouseholdState(household, [{ age: 30, retirementAge: 55 }], [acc({ currentBalance: 1 })])
+    expect(state.total.targetAge).toBe(55)
+  })
+
   it('carries the household assumptions through unchanged', () => {
-    const state = aggregateHouseholdState(household, [{ age: 30 }], [acc({ currentBalance: 1 })])
-    expect(state.targetAge).toBe(60)
+    const state = aggregateHouseholdState(household, [{ age: 30, retirementAge: 60 }], [acc({ currentBalance: 1 })])
     expect(state.investedRate).toBe(0.07)
     expect(state.cashRate).toBe(0.045)
   })
@@ -105,11 +133,11 @@ describe('aggregateHouseholdState', () => {
 
 describe('ownerStateToForecastInput', () => {
   const state: FrozenForecastState = {
-    targetAge: 60,
     investedRate: 0.07,
     cashRate: 0.045,
     total: {
       age: 34,
+      targetAge: 60,
       pension: 140_000,
       stocks: 30_000,
       cash: 12_000,
@@ -119,6 +147,7 @@ describe('ownerStateToForecastInput', () => {
     },
     personA: {
       age: 36,
+      targetAge: 65,
       pension: 100_000,
       stocks: 20_000,
       cash: 0,
@@ -127,7 +156,16 @@ describe('ownerStateToForecastInput', () => {
       cashMonthly: 0,
     },
     personB: null,
-    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0, cashMonthly: 150 },
+    joint: {
+      age: 34,
+      targetAge: 60,
+      pension: 0,
+      stocks: 0,
+      cash: 12_000,
+      monthly: 0,
+      pensionMonthly: 0,
+      cashMonthly: 150,
+    },
   }
 
   it("maps the 'total' slice onto ForecastInput + Assumptions, cashMonthly included", () => {
@@ -142,6 +180,11 @@ describe('ownerStateToForecastInput', () => {
       cashMonthly: 150,
     })
     expect(result.assumptions).toEqual({ investedRate: 0.07, cashRate: 0.045, targetAge: 60 })
+  })
+
+  it("maps person_a's own slice using THEIR OWN target age, not the household's", () => {
+    const result = ownerStateToForecastInput(state, 'person_a')!
+    expect(result.assumptions.targetAge).toBe(65)
   })
 
   it("maps person_a's own slice, using THEIR OWN age not the household anchor", () => {
@@ -162,11 +205,11 @@ describe('ownerStateToForecastInput', () => {
 
 describe('isValidFrozenState', () => {
   const state: FrozenForecastState = {
-    targetAge: 60,
     investedRate: 0.07,
     cashRate: 0.045,
     total: {
       age: 34,
+      targetAge: 60,
       pension: 140_000,
       stocks: 30_000,
       cash: 12_000,
@@ -176,6 +219,7 @@ describe('isValidFrozenState', () => {
     },
     personA: {
       age: 36,
+      targetAge: 65,
       pension: 100_000,
       stocks: 20_000,
       cash: 0,
@@ -184,12 +228,30 @@ describe('isValidFrozenState', () => {
       cashMonthly: 0,
     },
     personB: null,
-    joint: { age: 34, pension: 0, stocks: 0, cash: 12_000, monthly: 0, pensionMonthly: 0, cashMonthly: 150 },
+    joint: {
+      age: 34,
+      targetAge: 60,
+      pension: 0,
+      stocks: 0,
+      cash: 12_000,
+      monthly: 0,
+      pensionMonthly: 0,
+      cashMonthly: 150,
+    },
   }
 
   it('rejects a well-formed state that predates cashMonthly — the shape stored before this fix shipped', () => {
     const { cashMonthly: _cashMonthly, ...totalWithoutCashMonthly } = state.total
     expect(isValidFrozenState({ ...state, total: totalWithoutCashMonthly })).toBe(false)
+  })
+
+  it('rejects a well-formed state that predates per-person retirement ages — targetAge on each slice, not the top level', () => {
+    const { targetAge: _targetAge, ...totalWithoutTargetAge } = state.total
+    expect(isValidFrozenState({ ...state, total: totalWithoutTargetAge })).toBe(false)
+    // the exact shape stored before this change shipped — targetAge shared at
+    // the top level instead of living on each slice
+    const legacySharedTargetAge = { ...state, targetAge: 60, total: totalWithoutTargetAge }
+    expect(isValidFrozenState(legacySharedTargetAge)).toBe(false)
   })
 
   it('accepts a well-formed current-shape state', () => {

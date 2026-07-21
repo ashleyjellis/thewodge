@@ -24,7 +24,9 @@ export type HouseholdPerson = {
   householdId: string
   name: string
   age: number
+  retirementAge: number
   salary: number | null
+  salaryGrowthPct: number | null
   bonus: number | null
   employerPensionUserPct: number | null
   employerPensionMatchPct: number | null

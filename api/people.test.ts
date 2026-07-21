@@ -30,6 +30,40 @@ describe('POST /api/people', () => {
     expect(b.person.salary).toBe(88_000)
   })
 
+  it('defaults retirement age to 60 and accepts a custom one plus a salary growth rate', async () => {
+    // own household — the shared one in this describe block is used by the
+    // "third person" test below to test the 2-person cap
+    const otherHouseholdId = (await createHousehold(db)).id
+
+    const { res, status, body } = fakeRes()
+    await handlePeople(
+      db,
+      fakeReq({ method: 'POST', body: { householdId: otherHouseholdId, name: 'Ashley', age: 31 } }),
+      res,
+    )
+    expect(status()).toBe(201)
+    expect((body() as { person: { retirementAge: number } }).person.retirementAge).toBe(60)
+
+    const { res: res2, body: body2 } = fakeRes()
+    await handlePeople(
+      db,
+      fakeReq({
+        method: 'POST',
+        body: {
+          householdId: otherHouseholdId,
+          name: 'Charlotte',
+          age: 31,
+          retirementAge: 55,
+          salaryGrowthPct: 0.02,
+        },
+      }),
+      res2,
+    )
+    const person = (body2() as { person: { retirementAge: number; salaryGrowthPct: number } }).person
+    expect(person.retirementAge).toBe(55)
+    expect(person.salaryGrowthPct).toBe(0.02)
+  })
+
   it('rejects a missing name', async () => {
     const { res, status } = fakeRes()
     await handlePeople(db, fakeReq({ method: 'POST', body: { householdId, age: 30 } }), res)
@@ -75,6 +109,16 @@ describe('PATCH /api/people', () => {
   it('updates only the given fields', async () => {
     const { res, status } = fakeRes()
     await handlePeople(db, fakeReq({ method: 'PATCH', body: { id: personId, age: 37 } }), res)
+    expect(status()).toBe(200)
+  })
+
+  it('updates retirement age and salary growth rate', async () => {
+    const { res, status } = fakeRes()
+    await handlePeople(
+      db,
+      fakeReq({ method: 'PATCH', body: { id: personId, retirementAge: 56, salaryGrowthPct: 0.03 } }),
+      res,
+    )
     expect(status()).toBe(200)
   })
 })

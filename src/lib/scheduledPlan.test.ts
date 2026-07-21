@@ -281,8 +281,11 @@ describe('projectScheduledYearly', () => {
 })
 
 describe('buildScheduledPlan', () => {
-  const household = { retirementAge: 60, realReturn: 0.07, cashReturn: 0.045 }
-  const people = [{ age: 30 }, { age: 32 }]
+  const household = { realReturn: 0.07, cashReturn: 0.045 }
+  const people = [
+    { age: 30, retirementAge: 60 },
+    { age: 32, retirementAge: 60 },
+  ]
   const accounts: ScheduledPlanAccount[] = [
     { owner: 'person_a', potCategory: 'investments', monthlyContribution: 500, currentBalance: 10_000 },
     { owner: 'person_b', potCategory: 'investments', monthlyContribution: 300, currentBalance: 4_000 },
@@ -293,7 +296,7 @@ describe('buildScheduledPlan', () => {
     const result = buildScheduledPlan({
       owner: 'person_b',
       startYear: 2026,
-      people: [{ age: 30 }], // only person_a exists
+      people: [{ age: 30, retirementAge: 60 }], // only person_a exists
       household,
       accounts,
       changes: [],
@@ -315,6 +318,40 @@ describe('buildScheduledPlan', () => {
     expect(result[0]!.age).toBe(30) // the younger of 30/32
     expect(result[0]!.investments.startValue).toBe(14_000) // person_a + person_b
     expect(result[0]!.cash.startValue).toBe(2_000) // joint
+  })
+
+  it("a specific owner's projection runs to THEIR OWN retirement age, not a shared one", () => {
+    const result = buildScheduledPlan({
+      owner: 'person_a',
+      startYear: 2026,
+      people: [
+        { age: 30, retirementAge: 32 }, // just 2 years to go
+        { age: 32, retirementAge: 60 },
+      ],
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })!
+    expect(result.at(-1)!.age).toBe(32) // stops at person_a's own retirement age, not person_b's
+  })
+
+  it("'total' runs to the LATER of the two people's own retirement ages", () => {
+    const result = buildScheduledPlan({
+      owner: 'total',
+      startYear: 2026,
+      people: [
+        { age: 30, retirementAge: 32 }, // 2 years to go
+        { age: 32, retirementAge: 40 }, // 8 years to go — the longer horizon
+      ],
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })!
+    // anchored at the younger person's current age (30), run out 8 years (the
+    // longer of the two) — not 2 years, and not to age 40 directly
+    expect(result.at(-1)!.age).toBe(38)
   })
 
   it('a specific owner only sees their own accounts and age', () => {
@@ -369,7 +406,7 @@ describe('buildScheduledPlan', () => {
       owner: 'total',
       startYear: 2026,
       people,
-      household: { retirementAge: 35, realReturn: 0.5, cashReturn: 0 }, // exaggerated to make the split obvious
+      household: { realReturn: 0.5, cashReturn: 0 }, // exaggerated to make the split obvious
       accounts: [
         { owner: 'joint', potCategory: 'investments', monthlyContribution: 0, currentBalance: 10_000 },
         { owner: 'joint', potCategory: 'cash', monthlyContribution: 0, currentBalance: 10_000 },

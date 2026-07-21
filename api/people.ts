@@ -37,7 +37,9 @@ export async function handlePeople(db: Db, req: ApiRequest, res: ApiResponse): P
         householdId: body.householdId,
         name: body.name.trim(),
         age: body.age,
+        retirementAge: typeof body.retirementAge === 'number' ? body.retirementAge : undefined,
         salary: numberOrNull(body.salary),
+        salaryGrowthPct: numberOrNull(body.salaryGrowthPct),
         bonus: numberOrNull(body.bonus),
         employerPensionUserPct: numberOrNull(body.employerPensionUserPct),
         employerPensionMatchPct: numberOrNull(body.employerPensionMatchPct),
@@ -55,7 +57,9 @@ export async function handlePeople(db: Db, req: ApiRequest, res: ApiResponse): P
       const patch: PersonPatch = {}
       if (typeof body.name === 'string') patch.name = body.name.trim()
       if (typeof body.age === 'number') patch.age = body.age
+      if (typeof body.retirementAge === 'number') patch.retirementAge = body.retirementAge
       if ('salary' in body) patch.salary = numberOrNull(body.salary)
+      if ('salaryGrowthPct' in body) patch.salaryGrowthPct = numberOrNull(body.salaryGrowthPct)
       if ('bonus' in body) patch.bonus = numberOrNull(body.bonus)
       if ('employerPensionUserPct' in body)
         patch.employerPensionUserPct = numberOrNull(body.employerPensionUserPct)

@@ -20,7 +20,6 @@ import {
 } from '@/components/app/PersonCard'
 import { AccountForm, type AccountFormPayload } from '@/components/app/AccountForm'
 import { AccountRow } from '@/components/app/AccountRow'
-import { PlanSettings } from '@/components/app/PlanSettings'
 
 const accountsSeo = seo({
   title: `Accounts — ${SITE_NAME}`,
@@ -82,11 +81,6 @@ function AccountsPage() {
       await postJson('/api/people', { householdId: household.id, ...payload })
       setAddingPerson(false)
     }
-    await refetchHousehold()
-  }
-
-  const saveRetirementAge = async (retirementAge: number) => {
-    await patchJson('/api/household', { id: household.id, retirementAge })
     await refetchHousehold()
   }
 
@@ -264,8 +258,6 @@ function AccountsPage() {
           ))}
         </div>
       </section>
-
-      <PlanSettings retirementAge={household.retirementAge} onSave={saveRetirementAge} />
     </div>
   )
 }

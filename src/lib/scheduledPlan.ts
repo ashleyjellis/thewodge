@@ -9,7 +9,7 @@
  */
 import { futureValueContributions, futureValueLump, monthlyRate } from './forecast.js'
 import type { AccountOwner } from './accountOwner.js'
-import type { OwnerFilter, PotCategory } from './householdForecast.js'
+import { householdTargetAge, type OwnerFilter, type PotCategory } from './householdForecast.js'
 
 const POT_CATEGORIES: readonly PotCategory[] = ['pension', 'investments', 'cash']
 
@@ -280,7 +280,9 @@ export type ScheduledPlanAccount = {
 export type OwnerScopedContributionChange = ContributionChange & { owner: AccountOwner }
 export type OwnerScopedPlannedEvent = PlannedEvent & { owner: AccountOwner }
 
-function resolveOwnerAge(owner: OwnerFilter, people: { age: number }[]): number | null {
+type AgedPerson = { age: number; retirementAge: number }
+
+function resolveOwnerAge(owner: OwnerFilter, people: AgedPerson[]): number | null {
   if (owner === 'person_a') return people[0]?.age ?? null
   if (owner === 'person_b') return people[1]?.age ?? null
   // 'total' and 'joint' both anchor to the younger person's age, matching
@@ -288,6 +290,19 @@ function resolveOwnerAge(owner: OwnerFilter, people: { age: number }[]): number 
   // their own, and 'total' runs to the later person's retirement, not the
   // sooner one's
   return people.length > 0 ? Math.min(...people.map((p) => p.age)) : null
+}
+
+/**
+ * This owner's own horizon: person_a/person_b use their own retirement age
+ * directly; 'total'/'joint' run to the later of the two people's own ages
+ * (householdForecast.ts's householdTargetAge — the frozen baseline resolves
+ * 'total'/'joint' the exact same way).
+ */
+function resolveOwnerTargetAge(owner: OwnerFilter, anchorAge: number, people: AgedPerson[]): number | null {
+  if (owner === 'person_a') return people[0]?.retirementAge ?? null
+  if (owner === 'person_b') return people[1]?.retirementAge ?? null
+  if (people.length === 0) return null
+  return householdTargetAge(anchorAge, people)
 }
 
 /**
@@ -300,14 +315,15 @@ function resolveOwnerAge(owner: OwnerFilter, people: { age: number }[]): number 
 export function buildScheduledPlan(params: {
   owner: OwnerFilter
   startYear: number
-  people: { age: number }[]
-  household: { retirementAge: number; realReturn: number; cashReturn: number }
+  people: AgedPerson[]
+  household: { realReturn: number; cashReturn: number }
   accounts: ScheduledPlanAccount[]
   changes: OwnerScopedContributionChange[]
   events: OwnerScopedPlannedEvent[]
 }): ScheduledYearPoint[] | null {
   const age = resolveOwnerAge(params.owner, params.people)
-  if (age === null) return null
+  const targetAge = resolveOwnerTargetAge(params.owner, age ?? 0, params.people)
+  if (age === null || targetAge === null) return null
 
   const accounts =
     params.owner === 'total' ? params.accounts : params.accounts.filter((a) => a.owner === params.owner)
@@ -331,7 +347,7 @@ export function buildScheduledPlan(params: {
   return projectScheduledYearly({
     startYear: params.startYear,
     age,
-    targetAge: params.household.retirementAge,
+    targetAge,
     pots,
     changes: changes.map((c) => ({
       potCategory: c.potCategory,
