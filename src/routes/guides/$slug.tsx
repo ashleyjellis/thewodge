@@ -1,11 +1,52 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { SITE_NAME } from '@/config'
+import { SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
-import { getGuide } from '@/lib/guides'
+import { getGuide, type Guide } from '@/lib/guides'
 import { toSearch } from '@/lib/search'
 import { MaxWidthContainer } from '@/components/site/Container'
 import { PageHeader, Prose } from '@/components/site/Page'
 import { NavLink } from '@/components/NavLink'
+
+/**
+ * Article + (when present) FAQPage structured data — real SEO value (rich
+ * results, clearer entity signals) and an honest one: publisher/author is
+ * the site itself, never a fabricated byline or credential.
+ */
+function guideJsonLd(guide: Guide) {
+  const url = `${SITE_URL}/guides/${guide.slug}`
+  const publisher = { '@type': 'Organization', name: SITE_NAME, url: SITE_URL }
+  const article = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: guide.title,
+    description: guide.description,
+    datePublished: guide.datePublished,
+    dateModified: guide.dateModified ?? guide.datePublished,
+    author: publisher,
+    publisher,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+  }
+  if (!guide.faq || guide.faq.length === 0) return [article]
+  const faqPage = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: guide.faq.map((f) => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: { '@type': 'Answer', text: f.answer },
+    })),
+  }
+  return [article, faqPage]
+}
+
+function formatDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
 
 export const Route = createFileRoute('/guides/$slug')({
   head: ({ params }) => {
@@ -16,11 +57,17 @@ export const Route = createFileRoute('/guides/$slug')({
         description: 'Guide',
         path: '/guides',
       })
-    return seo({
-      title: g.metaTitle,
-      description: g.description,
-      path: `/guides/${g.slug}`,
-    })
+    return {
+      ...seo({
+        title: g.metaTitle,
+        description: g.description,
+        path: `/guides/${g.slug}`,
+      }),
+      scripts: guideJsonLd(g).map((schema) => ({
+        type: 'application/ld+json',
+        children: JSON.stringify(schema),
+      })),
+    }
   },
   component: GuidePage,
 })
@@ -51,11 +98,18 @@ function GuidePage() {
       <PageHeader
         eyebrow={guide.question}
         title={guide.title}
-        intro={guide.intro.map((p, i) => (
-          <p key={i} className={i > 0 ? 'mt-4' : undefined}>
-            {p}
-          </p>
-        ))}
+        intro={
+          <>
+            {guide.intro.map((p, i) => (
+              <p key={i} className={i > 0 ? 'mt-4' : undefined}>
+                {p}
+              </p>
+            ))}
+            <p className="mt-5 text-[13px] text-muted-foreground/70">
+              Last updated {formatDate(guide.dateModified ?? guide.datePublished)}
+            </p>
+          </>
+        }
       />
 
       <MaxWidthContainer className="py-12 lg:py-16">
@@ -67,8 +121,44 @@ function GuidePage() {
                 {block.body.map((p, j) => (
                   <p key={j}>{p}</p>
                 ))}
+                {block.list ? (
+                  <ul>
+                    {block.list.map((item, j) => (
+                      <li key={j}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </section>
             ))}
+
+            {guide.faq && guide.faq.length > 0 ? (
+              <section>
+                <h2>Frequently asked questions</h2>
+                {guide.faq.map((item, i) => (
+                  <div key={i}>
+                    <h3>{item.question}</h3>
+                    <p>{item.answer}</p>
+                  </div>
+                ))}
+              </section>
+            ) : null}
+
+            <section>
+              <h2>Where this comes from</h2>
+              <p>
+                This guide is written and maintained by {SITE_NAME}. Nothing here is
+                personalised financial advice — it's a plain explanation of a
+                calculation anyone can do themselves.
+              </p>
+              <p>
+                The forecast tool linked below uses the exact same assumptions and
+                formulas on every page, all stated openly on{' '}
+                <NavLink to="/methodology">our methodology page</NavLink>. If you'd
+                rather see your numbers than type them into a search box, that's
+                what it's for — and you can read how we handle your data on{' '}
+                <NavLink to="/security">the security page</NavLink>.
+              </p>
+            </section>
           </Prose>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">

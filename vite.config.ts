@@ -16,6 +16,7 @@ const PRERENDER_PATHS = [
   '/guides',
   '/guides/am-i-behind-for-my-age',
   '/guides/what-is-200-a-month-worth',
+  '/guides/what-is-my-net-worth',
   '/privacy',
   '/terms',
 ]
