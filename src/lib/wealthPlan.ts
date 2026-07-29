@@ -11,6 +11,12 @@
  * An expected annual bonus, if given, is added once a year — at year-end, so it
  * doesn't earn growth in the year it lands — to whichever single pot it's aimed at.
  *
+ * Either rate can be overridden for individual years (rateOverrides) — the
+ * year-by-year table lets someone say "I think growth slows in year 12" without
+ * changing the assumption for every other year. An override only affects its own
+ * year's rate; the balance effect still carries forward through ordinary
+ * compounding, exactly like a real rate change would.
+ *
  * Reuses forecast.ts's compounding primitives rather than duplicating them, but
  * keeps its own input/result shapes: this page's four named pots don't fit the
  * three-pot ForecastInput/ForecastResult used by the free calculator and /results,
@@ -27,6 +33,14 @@ import {
 import type { Assumptions, PotBreakdown, PotYearPoint } from './forecast'
 
 export type PotKey = 'pension' | 'isaStocks' | 'isaCash' | 'cashSavings'
+
+/** A manual rate override for one specific year (1 = the first projected year).
+ *  Leaving a field out means that rate keeps using the assumption for that year. */
+export type RateOverride = {
+  year: number
+  investedRate?: number
+  cashRate?: number
+}
 
 export const POT_KEYS: PotKey[] = ['pension', 'isaStocks', 'isaCash', 'cashSavings']
 
@@ -54,6 +68,8 @@ export type WealthPlanInput = {
   /** expected annual bonus contribution, added once a year to bonusTarget */
   bonus: number
   bonusTarget: PotKey
+  /** per-year manual rate tweaks — see RateOverride */
+  rateOverrides?: RateOverride[]
 }
 
 export type WealthPlanYearPoint = {
@@ -100,15 +116,15 @@ const zeroPoint = (v: number): PotYearPoint => ({
 function projectPotYearly(
   today: number,
   monthly: number,
-  rate: number,
+  rateForYear: (year: number) => number,
   years: number,
   annualLump: number,
 ): PotYearPoint[] {
-  const m = monthlyRate(rate)
   const points: PotYearPoint[] = [zeroPoint(today)]
   let balance = today
   for (let y = 1; y <= years; y++) {
     const start = balance
+    const m = monthlyRate(rateForYear(y))
     const grownBeforeLump =
       futureValueLump(start, m, 12) + futureValueContributions(monthly, m, 12)
     const contribution = monthly * 12 + annualLump
@@ -167,31 +183,36 @@ export function projectWealthPlan(
   const bonusAnnual = clampMoney(input.bonus)
   const bonusFor = (key: PotKey) => (input.bonusTarget === key ? bonusAnnual : 0)
 
+  const overridesByYear = new Map<number, RateOverride>()
+  for (const o of input.rateOverrides ?? []) overridesByYear.set(o.year, o)
+  const investedRateForYear = (y: number) => overridesByYear.get(y)?.investedRate ?? a.investedRate
+  const cashRateForYear = (y: number) => overridesByYear.get(y)?.cashRate ?? a.cashRate
+
   const pensionYearly = projectPotYearly(
     pensionToday,
     pensionMonthly,
-    a.investedRate,
+    investedRateForYear,
     years,
     bonusFor('pension'),
   )
   const isaStocksYearly = projectPotYearly(
     isaStocksToday,
     isaStocksMonthly,
-    a.investedRate,
+    investedRateForYear,
     years,
     bonusFor('isaStocks'),
   )
   const isaCashYearly = projectPotYearly(
     isaCashToday,
     isaCashMonthly,
-    a.cashRate,
+    cashRateForYear,
     years,
     bonusFor('isaCash'),
   )
   const cashSavingsYearly = projectPotYearly(
     cashSavingsToday,
     cashSavingsMonthly,
-    a.cashRate,
+    cashRateForYear,
     years,
     bonusFor('cashSavings'),
   )

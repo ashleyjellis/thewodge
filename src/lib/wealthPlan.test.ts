@@ -137,6 +137,57 @@ describe('projectWealthPlan (pure, nominal)', () => {
     expect(r.projectedTotal).toBe(0)
   })
 
+  it('a rate override only changes its own year — the balance effect still carries forward, not the rate', () => {
+    const withOverride = projectWealthPlan(
+      {
+        ...BASE,
+        age: 40,
+        targetAge: 42,
+        pension: 100_000,
+        rateOverrides: [{ year: 1, investedRate: 0 }],
+      },
+      A,
+    )
+    const withoutOverride = projectWealthPlan(
+      { ...BASE, age: 40, targetAge: 42, pension: 100_000 },
+      A,
+    )
+
+    // year 1: overridden to 0% — no growth that year
+    expect(withOverride.yearly[1]!.pots.pension.endValue).toBeCloseTo(100_000, 6)
+    // for comparison, the un-overridden run grew normally in year 1
+    expect(withoutOverride.yearly[1]!.pots.pension.endValue).toBeCloseTo(107_000, 1)
+
+    // year 2: back to the 7% assumption (not overridden), applied to the
+    // suppressed year-1 balance — the override's effect on the balance persists
+    // even though the rate itself reverted
+    expect(withOverride.yearly[2]!.pots.pension.endValue).toBeCloseTo(107_000, 1) // 100k × 1.07
+    expect(withoutOverride.yearly[2]!.pots.pension.endValue).toBeCloseTo(114_490, 1) // 100k × 1.07^2
+  })
+
+  it('an invested-rate override never touches cash-rate pots, and vice versa', () => {
+    const r = projectWealthPlan(
+      {
+        ...BASE,
+        age: 40,
+        targetAge: 42,
+        pension: 10_000,
+        isaCash: 50_000,
+        cashSavings: 50_000,
+        rateOverrides: [{ year: 1, cashRate: 0 }],
+      },
+      A,
+    )
+    // pension is untouched by a cashRate-only override — still the 7% default
+    expect(r.yearly[1]!.pots.pension.endValue).toBeCloseTo(10_700, 1)
+    // cash pots used the 0% override in year 1
+    expect(r.yearly[1]!.pots.isaCash.endValue).toBeCloseTo(50_000, 6)
+    expect(r.yearly[1]!.pots.cashSavings.endValue).toBeCloseTo(50_000, 6)
+    // year 2 reverts to the 2% default (not overridden)
+    expect(r.yearly[2]!.pots.isaCash.endValue).toBeCloseTo(51_000, 1)
+    expect(r.yearly[2]!.pots.cashSavings.endValue).toBeCloseTo(51_000, 1)
+  })
+
   it('handles age at/after target age — a single point, no growth', () => {
     const r = projectWealthPlan({ ...BASE, age: 60, targetAge: 60, pension: 50_000 }, A)
     expect(r.monthsToTarget).toBe(0)

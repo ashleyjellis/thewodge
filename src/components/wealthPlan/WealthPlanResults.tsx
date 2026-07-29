@@ -5,7 +5,7 @@
  * "on track / behind" language anywhere — same rules as the free calculator's
  * results, applied to four named pots instead of three.
  */
-import type { WealthPlanInput, WealthPlanResult } from '@/lib/wealthPlan'
+import type { RateOverride, WealthPlanInput, WealthPlanResult } from '@/lib/wealthPlan'
 import { POT_LABELS } from '@/lib/wealthPlan'
 import { money, percent } from '@/lib/format'
 import { StatRow } from '@/components/StatRow'
@@ -23,9 +23,17 @@ function potSub(pot: { today: number; contributions: number }): string {
 export function WealthPlanResults({
   input,
   result,
+  rateOverrides,
+  onOverrideChange,
+  onClearOverrides,
+  generation,
 }: {
   input: WealthPlanInput
   result: WealthPlanResult
+  rateOverrides: RateOverride[]
+  onOverrideChange: (year: number, field: 'investedRate' | 'cashRate', pct: number | undefined) => void
+  onClearOverrides: () => void
+  generation: number
 }) {
   const years = Math.max(0, result.targetAge - input.age)
   const marketLeads = result.marketAdds > result.whatYouPutIn
@@ -184,6 +192,10 @@ export function WealthPlanResults({
         yearly={result.yearly}
         crossoverYear={result.crossoverYear}
         assumptions={result.assumptions}
+        overrides={rateOverrides}
+        onOverrideChange={onOverrideChange}
+        onClearOverrides={onClearOverrides}
+        generation={generation}
       />
 
       {/* visible workings */}

@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { CASH_RATE, INVESTED_RATE, SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
-import { projectWealthPlan } from '@/lib/wealthPlan'
+import { projectWealthPlan, type RateOverride } from '@/lib/wealthPlan'
 import {
   canPlan,
   toWealthPlanAssumptions,
@@ -114,12 +115,51 @@ function WealthPlanningToolPage() {
   const hasAnyValue = Object.values(search).some((v) => v !== undefined)
   const effective = hasAnyValue ? search : EXAMPLE
   const ready = canPlan(effective)
+
+  // Per-year manual rate tweaks made directly in the table — deliberately not
+  // part of the URL (they're exploratory, cleared by "Clear manual rates" or by
+  // changing the plan itself), unlike everything else on this page.
+  const [rateOverrides, setRateOverrides] = useState<RateOverride[]>([])
+  // Bumped whenever the baseline changes or overrides are cleared, so the
+  // table's rate cells remount and re-seed from the new default — see
+  // WealthPlanYearlyTable's docstring for why that's necessary.
+  const [generation, setGeneration] = useState(0)
+
   const result = ready
-    ? projectWealthPlan(toWealthPlanInput(effective), toWealthPlanAssumptions(effective))
+    ? projectWealthPlan(
+        { ...toWealthPlanInput(effective), rateOverrides },
+        toWealthPlanAssumptions(effective),
+      )
     : null
 
   const onSubmit = (values: WealthPlanSearch) => {
+    setRateOverrides([])
+    setGeneration((g) => g + 1)
     void navigate({ to: '/wealth-planning-tool', search: toWealthPlanSearch(values) })
+  }
+
+  const onOverrideChange = (
+    year: number,
+    field: 'investedRate' | 'cashRate',
+    pct: number | undefined,
+  ) => {
+    setRateOverrides((prev) => {
+      const existing = prev.find((o) => o.year === year)
+      const merged: RateOverride = {
+        year,
+        investedRate: existing?.investedRate,
+        cashRate: existing?.cashRate,
+        [field]: pct,
+      }
+      const rest = prev.filter((o) => o.year !== year)
+      const isEmpty = merged.investedRate === undefined && merged.cashRate === undefined
+      return isEmpty ? rest : [...rest, merged]
+    })
+  }
+
+  const onClearOverrides = () => {
+    setRateOverrides([])
+    setGeneration((g) => g + 1)
   }
 
   return (
@@ -153,7 +193,14 @@ function WealthPlanningToolPage() {
 
         <div className="mt-12">
           {ready && result ? (
-            <WealthPlanResults input={toWealthPlanInput(effective)} result={result} />
+            <WealthPlanResults
+              input={toWealthPlanInput(effective)}
+              result={result}
+              rateOverrides={rateOverrides}
+              onOverrideChange={onOverrideChange}
+              onClearOverrides={onClearOverrides}
+              generation={generation}
+            />
           ) : (
             <div className="max-w-xl border-t border-border/60 py-10">
               <h2 className="text-[20px] font-semibold tracking-tight">
