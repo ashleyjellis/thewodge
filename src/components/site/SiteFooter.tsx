@@ -12,6 +12,7 @@ const COLUMNS: { title: string; links: { to: string; label: string; hash?: strin
     title: 'The tool',
     links: [
       { to: '/', hash: 'calculator', label: 'Check your trajectory' },
+      { to: '/wealth-planning-tool', label: 'Wealth planning tool' },
       { to: '/how-it-works', label: 'How it works' },
       { to: '/methodology', label: 'The maths' },
     ],

@@ -13,6 +13,7 @@ const PRERENDER_PATHS = [
   '/methodology',
   '/about',
   '/security',
+  '/wealth-planning-tool',
   '/guides',
   '/guides/am-i-behind-for-my-age',
   '/guides/what-is-200-a-month-worth',
