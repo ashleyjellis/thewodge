@@ -4,6 +4,7 @@ import { seo } from '@/lib/seo'
 import { projectWealthPlan } from '@/lib/wealthPlan'
 import {
   canPlan,
+  toWealthPlanAssumptions,
   toWealthPlanInput,
   toWealthPlanSearch,
   validateWealthPlanSearch,
@@ -57,7 +58,7 @@ const FAQ: { question: string; answer: string }[] = [
   },
   {
     question: 'What growth rates are you assuming?',
-    answer: `Pension and ISA stocks & shares grow at ${percent(INVESTED_RATE)} a year; ISA cash and cash savings grow at ${percent(CASH_RATE)} a year — both nominal (not inflation-adjusted), both stated openly, with sources, on the methodology page.`,
+    answer: `By default, pension and ISA stocks & shares grow at ${percent(INVESTED_RATE)} a year; ISA cash and cash savings grow at ${percent(CASH_RATE)} a year — both nominal (not inflation-adjusted), both stated openly, with sources, on the methodology page. Open the assumptions section of the form to use your own rates instead.`,
   },
 ]
 
@@ -113,7 +114,9 @@ function WealthPlanningToolPage() {
   const hasAnyValue = Object.values(search).some((v) => v !== undefined)
   const effective = hasAnyValue ? search : EXAMPLE
   const ready = canPlan(effective)
-  const result = ready ? projectWealthPlan(toWealthPlanInput(effective)) : null
+  const result = ready
+    ? projectWealthPlan(toWealthPlanInput(effective), toWealthPlanAssumptions(effective))
+    : null
 
   const onSubmit = (values: WealthPlanSearch) => {
     void navigate({ to: '/wealth-planning-tool', search: toWealthPlanSearch(values) })
@@ -134,48 +137,35 @@ function WealthPlanningToolPage() {
       />
 
       <MaxWidthContainer className="py-12 lg:py-16">
-        {ready && result ? (
-          <>
-            {!hasAnyValue ? (
-              <div className="mb-6 rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
-                This is a worked example so you can see the plan in action — change
-                any number below and it becomes yours.
-              </div>
-            ) : null}
+        <div className="max-w-2xl">
+          {!hasAnyValue ? (
+            <div className="mb-6 rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
+              This is a worked example so you can see the plan in action — change
+              any number below and it becomes yours.
+            </div>
+          ) : null}
+          <WealthPlanForm
+            initial={effective}
+            onSubmit={onSubmit}
+            submitLabel={ready ? 'Update my plan' : 'See your plan'}
+          />
+        </div>
 
+        <div className="mt-12">
+          {ready && result ? (
             <WealthPlanResults input={toWealthPlanInput(effective)} result={result} />
-
-            <div className="mt-10 border-t border-border/60 pt-10">
-              <h2 className="text-[15px] font-semibold tracking-tight">
-                Adjust your numbers
+          ) : (
+            <div className="max-w-xl border-t border-border/60 py-10">
+              <h2 className="text-[20px] font-semibold tracking-tight">
+                Add your numbers above to see your plan
               </h2>
-              <p className="mt-2 text-[13px] text-muted-foreground">
-                Change anything — your plan updates. Your inputs live in the page’s
-                address, so you can bookmark or share this view.
+              <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+                Your age and at least one pot or contribution are enough to begin.
+                Nothing is saved or sent.
               </p>
-              <div className="mt-5 max-w-2xl">
-                <WealthPlanForm
-                  initial={effective}
-                  onSubmit={onSubmit}
-                  submitLabel="Update"
-                />
-              </div>
             </div>
-          </>
-        ) : (
-          <div className="mx-auto max-w-2xl">
-            <h1 className="text-center text-[22px] font-semibold tracking-tight">
-              Add your numbers to see your plan
-            </h1>
-            <p className="mt-3 text-center text-[15px] leading-relaxed text-muted-foreground">
-              Your age and at least one pot or contribution are enough to begin.
-              Nothing is saved or sent.
-            </p>
-            <div className="mt-8">
-              <WealthPlanForm initial={effective} onSubmit={onSubmit} />
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </MaxWidthContainer>
 
       <MaxWidthContainer className="border-t border-border/60 py-12 lg:py-16">
@@ -190,13 +180,15 @@ function WealthPlanningToolPage() {
 
           <h2>Where this comes from</h2>
           <p>
-            This tool is built and maintained by {SITE_NAME}. It uses the exact
-            same growth assumptions and formulas as everywhere else on the site —
-            nothing here is tuned to look more impressive than your numbers
-            actually are.
+            This tool is built and maintained by {SITE_NAME}. It uses the same
+            formulas as everywhere else on the site, starting from the same
+            default growth assumptions — nothing here is tuned to look more
+            impressive than your numbers actually are. You can override either
+            rate for this forecast in the assumptions section of the form, and
+            whatever you choose is stated openly next to the year-by-year table.
           </p>
           <p>
-            Every rate is stated openly, with sources, on{' '}
+            The defaults are stated openly, with sources, on{' '}
             <NavLink to="/methodology">our methodology page</NavLink>. You can read
             how we handle your data — nothing saved, nothing sent — on{' '}
             <NavLink to="/security">the security page</NavLink>.

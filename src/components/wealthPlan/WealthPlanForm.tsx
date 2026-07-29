@@ -11,10 +11,14 @@
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { POT_KEYS, POT_LABELS, type PotKey } from '@/lib/wealthPlan'
-import type { WealthPlanSearch } from '@/lib/wealthPlanSearch'
-import { TARGET_AGE } from '@/config'
+import { rateToPct, type WealthPlanSearch } from '@/lib/wealthPlanSearch'
+import { CASH_RATE, INVESTED_RATE, TARGET_AGE } from '@/config'
 import { cn } from '@/lib/cn'
+
+const DEFAULT_INVESTED_PCT = rateToPct(INVESTED_RATE)
+const DEFAULT_CASH_PCT = rateToPct(CASH_RATE)
 
 type FieldState = {
   age: string
@@ -30,6 +34,8 @@ type FieldState = {
   cashSavingsMonthly: string
   bonus: string
   bonusTarget: PotKey
+  investedRatePct: string
+  cashRatePct: string
 }
 
 function toFieldState(v: WealthPlanSearch): FieldState {
@@ -48,6 +54,8 @@ function toFieldState(v: WealthPlanSearch): FieldState {
     cashSavingsMonthly: s(v.cashSavingsMonthly),
     bonus: s(v.bonus),
     bonusTarget: v.bonusTarget ?? 'isaStocks',
+    investedRatePct: s(v.investedRatePct ?? DEFAULT_INVESTED_PCT),
+    cashRatePct: s(v.cashRatePct ?? DEFAULT_CASH_PCT),
   }
 }
 
@@ -70,6 +78,8 @@ function toSearchValues(f: FieldState): WealthPlanSearch {
     cashSavingsMonthly: n(f.cashSavingsMonthly),
     bonus: n(f.bonus),
     bonusTarget: f.bonusTarget,
+    investedRatePct: n(f.investedRatePct),
+    cashRatePct: n(f.cashRatePct),
   }
 }
 
@@ -206,6 +216,34 @@ export function WealthPlanForm({
             onChange={(bonusTarget) => setF((p) => ({ ...p, bonusTarget }))}
           />
         </Section>
+
+        <Section
+          title="Assumptions"
+          hint={
+            <>
+              {f.investedRatePct || DEFAULT_INVESTED_PCT}% investments ·{' '}
+              {f.cashRatePct || DEFAULT_CASH_PCT}% cash — yours to change
+            </>
+          }
+          collapsible
+        >
+          <Field
+            label="Investment growth rate"
+            hint="pension & ISA stocks and shares, per year"
+            suffix="%"
+            value={f.investedRatePct}
+            onChange={set('investedRatePct')}
+            placeholder={String(DEFAULT_INVESTED_PCT)}
+          />
+          <Field
+            label="Cash growth rate"
+            hint="ISA cash & cash savings, per year"
+            suffix="%"
+            value={f.cashRatePct}
+            onChange={set('cashRatePct')}
+            placeholder={String(DEFAULT_CASH_PCT)}
+          />
+        </Section>
       </div>
 
       <button
@@ -225,31 +263,57 @@ function Section({
   title,
   hint,
   cols = 2,
+  collapsible = false,
   children,
 }: {
   title: string
-  hint?: string
+  hint?: ReactNode
   cols?: 2 | 3
+  /** renders as a closed-by-default <details> — for optional, advanced fields */
+  collapsible?: boolean
   children: ReactNode
 }) {
+  const heading = (
+    <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+      {title}
+      {hint ? (
+        <span className="ml-1.5 normal-case font-normal text-muted-foreground/70">
+          {hint}
+        </span>
+      ) : null}
+    </p>
+  )
+  const grid = (
+    <div
+      className={cn(
+        'mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2',
+        cols === 3 && 'lg:grid-cols-3',
+      )}
+    >
+      {children}
+    </div>
+  )
+
+  if (collapsible) {
+    return (
+      <details className="border-t border-border/60 pt-7">
+        <summary className="flex items-center justify-between gap-3">
+          {heading}
+          <ChevronDown
+            size={16}
+            strokeWidth={2.25}
+            className="drawer-chevron shrink-0 text-muted-foreground"
+          />
+        </summary>
+        {grid}
+      </details>
+    )
+  }
+
   return (
     <div className="border-t border-border/60 pt-7 first:border-t-0 first:pt-0">
-      <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        {title}
-        {hint ? (
-          <span className="ml-1.5 normal-case font-normal text-muted-foreground/70">
-            {hint}
-          </span>
-        ) : null}
-      </p>
-      <div
-        className={cn(
-          'mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2',
-          cols === 3 && 'lg:grid-cols-3',
-        )}
-      >
-        {children}
-      </div>
+      {heading}
+      {grid}
     </div>
   )
 }

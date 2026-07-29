@@ -5,7 +5,8 @@
  * because this tool asks for four named pots (not three) plus a salary-based
  * pension percentage and a bonus — genuinely different shape, not an extension.
  */
-import { TARGET_AGE } from '../config'
+import { CASH_RATE, INVESTED_RATE, TARGET_AGE } from '../config'
+import type { Assumptions } from './forecast'
 import type { PotKey, WealthPlanInput } from './wealthPlan'
 import { POT_KEYS } from './wealthPlan'
 
@@ -24,6 +25,10 @@ export type WealthPlanSearch = {
   cashSavingsMonthly?: number
   bonus?: number
   bonusTarget?: PotKey
+  /** whole percent — pension + ISA stocks & shares; defaults to the sitewide rate */
+  investedRatePct?: number
+  /** whole percent — ISA cash + cash savings; defaults to the sitewide rate */
+  cashRatePct?: number
 }
 
 const NON_NEGATIVE = (v: unknown): number | undefined => {
@@ -56,6 +61,8 @@ export function validateWealthPlanSearch(
     cashSavingsMonthly: NON_NEGATIVE(search.cashSavingsMonthly),
     bonus: NON_NEGATIVE(search.bonus),
     bonusTarget: asPotKey(search.bonusTarget),
+    investedRatePct: NON_NEGATIVE(search.investedRatePct),
+    cashRatePct: NON_NEGATIVE(search.cashRatePct),
   }
 }
 
@@ -73,6 +80,20 @@ export function canPlan(s: WealthPlanSearch): boolean {
       ((s.salary ?? 0) > 0 && (s.pensionPct ?? 0) > 0 ? 1 : 0) >
     0
   return hasAge && hasSomething
+}
+
+/** Fraction → a clean whole/half-percent number for display — avoids float noise
+ *  like 0.07 × 100 = 7.000000000000001 showing up in a form field. */
+export function rateToPct(rate: number): number {
+  return Math.round(rate * 10000) / 100
+}
+
+export function toWealthPlanAssumptions(s: WealthPlanSearch): Assumptions {
+  return {
+    investedRate: s.investedRatePct !== undefined ? s.investedRatePct / 100 : INVESTED_RATE,
+    cashRate: s.cashRatePct !== undefined ? s.cashRatePct / 100 : CASH_RATE,
+    targetAge: s.targetAge ?? TARGET_AGE,
+  }
 }
 
 export function toWealthPlanInput(s: WealthPlanSearch): WealthPlanInput {
@@ -106,6 +127,8 @@ const NUMERIC_KEYS = [
   'isaCashMonthly',
   'cashSavingsMonthly',
   'bonus',
+  'investedRatePct',
+  'cashRatePct',
 ] as const
 
 /** Drop empty values so the URL stays clean. */

@@ -4,16 +4,19 @@
  * calculator's YearlyTable, extended from three pots to four. The row where growth
  * first outweighs that year's contribution is marked, same rule as everywhere else.
  */
-import { money } from '@/lib/format'
+import { money, percent } from '@/lib/format'
 import { cn } from '@/lib/cn'
+import type { Assumptions } from '@/lib/forecast'
 import type { WealthPlanYearPoint } from '@/lib/wealthPlan'
 
 export function WealthPlanYearlyTable({
   yearly,
   crossoverYear,
+  assumptions,
 }: {
   yearly: WealthPlanYearPoint[]
   crossoverYear: number | null
+  assumptions: Assumptions
 }) {
   const lastAge = yearly[yearly.length - 1]?.age
 
@@ -21,8 +24,11 @@ export function WealthPlanYearlyTable({
     <div className="rounded-3xl bg-card p-7 shadow-soft">
       <h2 className="text-[15px] font-semibold tracking-tight">Year by year</h2>
       <p className="mt-2 max-w-lg text-[13px] text-muted-foreground">
-        Ending position for every pot, every year to {lastAge}, plus what you put in
-        and what grew that year.
+        Ending position for every pot, every year to {lastAge}, plus what you put
+        in (including any bonus) and what grew that year — assuming{' '}
+        {percent(assumptions.investedRate)} a year on investments and pension,{' '}
+        {percent(assumptions.cashRate)} a year on cash. Change either in the
+        assumptions section of the form above.
       </p>
 
       <div className="mt-5 max-h-[480px] overflow-y-auto overflow-x-auto rounded-2xl">
@@ -87,10 +93,9 @@ export function WealthPlanYearlyTable({
       </div>
 
       <p className="mt-4 text-[12px] text-muted-foreground">
-        Pension grows from what you hold today plus your % contribution; ISA cash
-        and cash savings grow at the cash rate; ISA stocks &amp; shares and pension
-        grow at the invested rate. Your bonus, if you added one, lands at the end of
-        whichever year it's given.
+        “Put in” is every contribution that pot received that year, including a
+        bonus if you aimed one at it. “Grew” is everything above that — the
+        market’s share, not yours.
       </p>
     </div>
   )

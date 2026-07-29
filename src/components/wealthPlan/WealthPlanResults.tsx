@@ -7,7 +7,6 @@
  */
 import type { WealthPlanInput, WealthPlanResult } from '@/lib/wealthPlan'
 import { POT_LABELS } from '@/lib/wealthPlan'
-import { INVESTED_RATE, CASH_RATE } from '@/config'
 import { money, percent } from '@/lib/format'
 import { StatRow } from '@/components/StatRow'
 import { StackedBar } from '@/components/StackedBar'
@@ -152,7 +151,8 @@ export function WealthPlanResults({
       {input.bonus > 0 ? (
         <div className="rounded-3xl bg-accent/40 p-6 sm:p-7">
           <p className="text-[13px] leading-relaxed text-foreground/80">
-            Your expected {money(input.bonus)} annual bonus is added to your{' '}
+            Your expected {money(input.bonus)} annual bonus is counted as part of
+            what you put in, added to your{' '}
             <span className="font-semibold text-foreground">
               {POT_LABELS[input.bonusTarget].toLowerCase()}
             </span>{' '}
@@ -180,13 +180,17 @@ export function WealthPlanResults({
       ) : null}
 
       {/* the year-by-year table */}
-      <WealthPlanYearlyTable yearly={result.yearly} crossoverYear={result.crossoverYear} />
+      <WealthPlanYearlyTable
+        yearly={result.yearly}
+        crossoverYear={result.crossoverYear}
+        assumptions={result.assumptions}
+      />
 
       {/* visible workings */}
       <div className="rounded-3xl bg-card p-7 shadow-soft">
         <HowWeWorkedThisOut>
           <Working
-            formula={`Pension and ISA stocks & shares grow at ${percent(INVESTED_RATE)} a year; ISA cash and cash savings grow at ${percent(CASH_RATE)} a year. Compounded monthly to age ${result.targetAge}.`}
+            formula={`Pension and ISA stocks & shares grow at ${percent(result.assumptions.investedRate)} a year; ISA cash and cash savings grow at ${percent(result.assumptions.cashRate)} a year — both set in the assumptions section above. Compounded monthly to age ${result.targetAge}.`}
             numbers={`pension ${money(result.pots.pension.future)} + ISA stocks & shares ${money(result.pots.isaStocks.future)} + ISA cash ${money(result.pots.isaCash.future)} + cash savings ${money(result.pots.cashSavings.future)} = ${money(result.projectedTotal)}`}
           />
           {result.pensionMonthly > 0 ? (
