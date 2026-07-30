@@ -135,7 +135,18 @@ function WealthPlanningToolPage() {
   const onSubmit = (values: WealthPlanSearch) => {
     setRateOverrides([])
     setGeneration((g) => g + 1)
-    void navigate({ to: '/wealth-planning-tool', search: toWealthPlanSearch(values) })
+    // resetScroll: false — the router defaults to jumping scroll to the top of
+    // the page on navigate, which would fight the manual scroll below.
+    void navigate({
+      to: '/wealth-planning-tool',
+      search: toWealthPlanSearch(values),
+      resetScroll: false,
+    }).then(() => {
+      document.getElementById('plan-results')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
   }
 
   const onOverrideChange = (
@@ -191,7 +202,7 @@ function WealthPlanningToolPage() {
           />
         </div>
 
-        <div className="mt-12">
+        <div id="plan-results" className="mt-12 scroll-mt-20">
           {ready && result ? (
             <WealthPlanResults
               input={toWealthPlanInput(effective)}

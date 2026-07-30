@@ -71,18 +71,20 @@ export function WealthPlanYearlyTable({
       </div>
 
       <div className="mt-5 max-h-[480px] overflow-y-auto overflow-x-auto rounded-2xl">
-        <table className="w-full min-w-[940px] text-[13px] tabular-nums">
+        <table className="w-full min-w-[900px] text-[13px] tabular-nums">
           <thead className="sticky top-0 z-10 bg-card text-left text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             <tr>
-              <th className="py-2 pr-3 font-medium">Age</th>
-              <th className="py-2 pr-3 font-medium">Invested</th>
-              <th className="py-2 pr-3 font-medium">Cash</th>
-              <th className="py-2 pr-3 text-right font-medium">Pension</th>
-              <th className="py-2 pr-3 text-right font-medium">ISA S&amp;S</th>
-              <th className="py-2 pr-3 text-right font-medium">ISA cash</th>
-              <th className="py-2 pr-3 text-right font-medium">Cash</th>
-              <th className="py-2 pr-3 text-right font-medium">Total</th>
-              <th className="py-2 pr-3 text-right font-medium">Put in</th>
+              <th className="sticky left-0 z-20 border-r border-border bg-card py-2 pr-2.5 font-medium">
+                Age
+              </th>
+              <th className="py-2 pr-2.5 font-medium">Invested</th>
+              <th className="py-2 pr-2.5 font-medium">Cash</th>
+              <th className="py-2 pr-2.5 text-right font-medium">Pension</th>
+              <th className="py-2 pr-2.5 text-right font-medium">ISA S&amp;S</th>
+              <th className="py-2 pr-2.5 text-right font-medium">ISA cash</th>
+              <th className="py-2 pr-2.5 text-right font-medium">Cash</th>
+              <th className="py-2 pr-2.5 text-right font-medium">Total</th>
+              <th className="py-2 pr-2.5 text-right font-medium">Put in</th>
               <th className="py-2 text-right font-medium">Grew</th>
             </tr>
           </thead>
@@ -98,15 +100,20 @@ export function WealthPlanYearlyTable({
                     isCrossover && 'bg-accent/30',
                   )}
                 >
-                  <td className="py-2.5 pr-3 text-muted-foreground">
+                  <td
+                    className={cn(
+                      'sticky left-0 z-10 whitespace-nowrap border-r border-border py-2 pr-2.5 text-muted-foreground',
+                      isCrossover ? 'bg-accent/30' : 'bg-card',
+                    )}
+                  >
                     {p.age}
                     {isCrossover ? (
-                      <span className="ml-2 inline-block rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground">
-                        market takes the lead
+                      <span className="ml-1.5 inline-block rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-foreground">
+                        crossover
                       </span>
                     ) : null}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className="py-1.5 pr-2.5">
                     {p.year === 0 ? (
                       <span className="text-muted-foreground">—</span>
                     ) : (
@@ -118,7 +125,7 @@ export function WealthPlanYearlyTable({
                       />
                     )}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td className="py-1.5 pr-2.5">
                     {p.year === 0 ? (
                       <span className="text-muted-foreground">—</span>
                     ) : (
@@ -130,25 +137,25 @@ export function WealthPlanYearlyTable({
                       />
                     )}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                  <td className="py-2 pr-2.5 text-right text-muted-foreground">
                     {money(p.pots.pension.endValue)}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                  <td className="py-2 pr-2.5 text-right text-muted-foreground">
                     {money(p.pots.isaStocks.endValue)}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                  <td className="py-2 pr-2.5 text-right text-muted-foreground">
                     {money(p.pots.isaCash.endValue)}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                  <td className="py-2 pr-2.5 text-right text-muted-foreground">
                     {money(p.pots.cashSavings.endValue)}
                   </td>
-                  <td className="py-2.5 pr-3 text-right font-semibold text-foreground">
+                  <td className="py-2 pr-2.5 text-right font-semibold text-foreground">
                     {money(p.total.endValue)}
                   </td>
-                  <td className="py-2.5 pr-3 text-right text-muted-foreground">
+                  <td className="py-2 pr-2.5 text-right text-muted-foreground">
                     {p.year === 0 ? '—' : money(p.total.contribution)}
                   </td>
-                  <td className="py-2.5 text-right text-muted-foreground">
+                  <td className="py-2 text-right text-muted-foreground">
                     {p.year === 0 ? '—' : money(p.total.growth)}
                   </td>
                 </tr>

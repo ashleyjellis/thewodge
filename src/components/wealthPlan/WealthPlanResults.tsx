@@ -157,32 +157,26 @@ export function WealthPlanResults({
 
       {/* transparency on where the bonus goes — a real modelling choice, never silent */}
       {input.bonus > 0 ? (
-        <div className="rounded-3xl bg-accent/40 p-6 sm:p-7">
+        <div className="rounded-2xl bg-accent/40 px-5 py-4">
           <p className="text-[13px] leading-relaxed text-foreground/80">
             Your expected {money(input.bonus)} annual bonus is counted as part of
             what you put in, added to your{' '}
             <span className="font-semibold text-foreground">
               {POT_LABELS[input.bonusTarget].toLowerCase()}
             </span>{' '}
-            at the end of each year — change that in the form above if it should go
-            somewhere else.
+            at the end of each year — change that above if it should go elsewhere.
           </p>
         </div>
       ) : null}
 
       {/* the crossover moment — named here, shown in full in the table below */}
       {crossoverAge !== null ? (
-        <div className="rounded-3xl bg-accent/40 p-7 sm:p-8">
-          <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Worth pausing on
-          </p>
-          <h2 className="mt-3 text-[20px] font-semibold leading-snug tracking-tight sm:text-[22px]">
-            There’s a year the market starts doing more than you do.
-          </h2>
-          <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-foreground/80">
-            From around age {crossoverAge}, growth on what you already hold
-            typically adds more in a single year than everything you put in that
-            year — quietly, from then on. The table below shows exactly when.
+        <div className="rounded-2xl bg-accent/40 px-5 py-4">
+          <p className="max-w-xl text-[13px] leading-relaxed text-foreground/80">
+            <span className="font-semibold text-foreground">Worth pausing on:</span>{' '}
+            from around age {crossoverAge}, growth on what you already hold
+            typically adds more in a year than everything you put in that year —
+            quietly, from then on. The table below shows exactly when.
           </p>
         </div>
       ) : null}
@@ -238,22 +232,18 @@ export function WealthPlanResults({
       </p>
 
       {/* the honest step-up — this is a one-off forecast, not a tracked plan */}
-      <div className="rounded-3xl bg-foreground p-7 text-primary-foreground shadow-soft sm:p-10">
-        <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-primary-foreground/70">
-          What this forecast doesn’t do
-        </p>
-        <h2 className="mt-3 text-[22px] font-semibold leading-snug tracking-tight sm:text-[26px]">
-          It’s a snapshot, not a tracked plan.
-        </h2>
-        <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-primary-foreground/90">
-          Come back next month and you’re starting from these same numbers again,
-          typed in from scratch. The full household tool keeps your pension, ISAs
-          and cash up to date as reality moves — the same four pots, tracked over
-          time, not modelled once.
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-foreground p-6 text-primary-foreground shadow-soft sm:p-7">
+        <p className="max-w-md text-[14px] leading-relaxed text-primary-foreground/90">
+          <span className="font-semibold text-primary-foreground">
+            It’s a snapshot, not a tracked plan.
+          </span>{' '}
+          Come back next month and you’re retyping these same numbers — the full
+          household tool keeps them updated as reality moves, tracked over time
+          instead of modelled once.
         </p>
         <NavLink
           to="/app"
-          className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-background px-6 py-3.5 text-[15px] font-semibold text-foreground transition-opacity hover:opacity-95 sm:w-auto"
+          className="inline-flex shrink-0 items-center justify-center rounded-full bg-background px-5 py-3 text-[14px] font-semibold text-foreground transition-opacity hover:opacity-95"
         >
           See the full household picture →
         </NavLink>
