@@ -101,14 +101,17 @@ export function WealthPlanYearlyTable({
                   )}
                 >
                   <td
-                    className={cn(
-                      'sticky left-0 z-10 whitespace-nowrap border-r border-border py-2 pr-2.5 text-muted-foreground',
-                      isCrossover ? 'bg-accent/30' : 'bg-card',
-                    )}
+                    // always a solid, non-transparent background — this cell sits on
+                    // top of every other column as they scroll underneath it, and a
+                    // translucent bg-accent/30 here let that scrolled content show
+                    // through, which read as the number "behind" the age. The row
+                    // tint above still carries the crossover colour on every column
+                    // except this frozen one.
+                    className="sticky left-0 z-[5] whitespace-nowrap border-r border-border bg-card py-2 pr-2.5 text-muted-foreground"
                   >
                     {p.age}
                     {isCrossover ? (
-                      <span className="ml-1.5 inline-block rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-foreground">
+                      <span className="ml-1.5 hidden rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-foreground sm:inline-block">
                         crossover
                       </span>
                     ) : null}

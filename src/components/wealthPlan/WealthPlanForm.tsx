@@ -104,9 +104,9 @@ export function WealthPlanForm({
         e.preventDefault()
         onSubmit(toSearchValues(f))
       }}
-      className={cn('rounded-3xl bg-card p-6 shadow-soft sm:p-8', className)}
+      className={cn('rounded-3xl bg-card p-5 shadow-soft sm:p-6', className)}
     >
-      <div className="space-y-7">
+      <div className="space-y-5">
         <Section title="About you" cols={3}>
           <Field
             label="Your age"
@@ -248,11 +248,11 @@ export function WealthPlanForm({
 
       <button
         type="submit"
-        className="mt-7 w-full rounded-full bg-foreground px-6 py-4 text-center text-[15px] font-semibold text-primary-foreground transition-opacity hover:opacity-95"
+        className="mt-5 w-full rounded-full bg-foreground px-6 py-3.5 text-center text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-95"
       >
         {submitLabel}
       </button>
-      <p className="mt-3 text-center text-[12px] text-muted-foreground">
+      <p className="mt-2.5 text-center text-[11px] text-muted-foreground">
         Nothing is saved or sent. Your numbers stay in the page.
       </p>
     </form>
@@ -274,7 +274,7 @@ function Section({
   children: ReactNode
 }) {
   const heading = (
-    <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
       {title}
       {hint ? (
         <span className="ml-1.5 normal-case font-normal text-muted-foreground/70">
@@ -286,7 +286,7 @@ function Section({
   const grid = (
     <div
       className={cn(
-        'mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2',
+        'mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2',
         cols === 3 && 'lg:grid-cols-3',
       )}
     >
@@ -296,7 +296,7 @@ function Section({
 
   if (collapsible) {
     return (
-      <details className="border-t border-border/60 pt-7">
+      <details className="border-t border-border/60 pt-5">
         <summary className="flex items-center justify-between gap-3">
           {heading}
           <ChevronDown
@@ -311,7 +311,7 @@ function Section({
   }
 
   return (
-    <div className="border-t border-border/60 pt-7 first:border-t-0 first:pt-0">
+    <div className="border-t border-border/60 pt-5 first:border-t-0 first:pt-0">
       {heading}
       {grid}
     </div>
@@ -327,17 +327,17 @@ function BonusTargetPicker({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <span className="text-[13px] font-medium leading-snug text-foreground">
+      <span className="text-[12.5px] font-medium leading-snug text-foreground">
         Add the bonus to
       </span>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {POT_KEYS.map((key) => (
           <button
             key={key}
             type="button"
             onClick={() => onChange(key)}
             className={cn(
-              'rounded-full px-4 py-2.5 text-[13px] font-medium transition-colors',
+              'rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-colors',
               value === key
                 ? 'bg-foreground text-primary-foreground'
                 : 'bg-muted text-muted-foreground hover:text-foreground',
@@ -376,15 +376,15 @@ function Field({
   const handle = (raw: string) => onChange(raw.replace(/,/g, ''))
   return (
     <label className={cn('flex h-full flex-col', className)}>
-      <span className="text-[13px] font-medium leading-snug text-foreground">
+      <span className="text-[12.5px] font-medium leading-snug text-foreground">
         {label}
         {hint ? (
           <span className="ml-1.5 font-normal text-muted-foreground">{hint}</span>
         ) : null}
       </span>
-      <span className="mt-3 flex items-center gap-1 rounded-2xl bg-muted px-4 py-3 ring-1 ring-transparent transition focus-within:bg-card focus-within:ring-foreground/25">
+      <span className="mt-2 flex items-center gap-1 rounded-xl bg-muted px-3.5 py-2.5 ring-1 ring-transparent transition focus-within:bg-card focus-within:ring-foreground/25">
         {prefix ? (
-          <span className="text-[18px] font-semibold text-muted-foreground">
+          <span className="text-[15px] font-semibold text-muted-foreground">
             {prefix}
           </span>
         ) : null}
@@ -394,10 +394,10 @@ function Field({
           value={value}
           placeholder={placeholder}
           onChange={(e) => handle(e.target.value)}
-          className="w-full bg-transparent text-[18px] font-semibold tabular-nums tracking-tight text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground/50"
+          className="w-full bg-transparent text-[15px] font-semibold tabular-nums tracking-tight text-foreground outline-none placeholder:font-normal placeholder:text-muted-foreground/50"
         />
         {suffix ? (
-          <span className="text-[18px] font-semibold text-muted-foreground">
+          <span className="text-[15px] font-semibold text-muted-foreground">
             {suffix}
           </span>
         ) : null}
