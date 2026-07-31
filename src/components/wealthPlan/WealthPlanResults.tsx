@@ -4,14 +4,16 @@
  * year-by-year table. Consequences, not verdicts: no comparison to anyone, no
  * "on track / behind" language anywhere — same rules as the free calculator's
  * results, applied to four named pots instead of three.
+ *
+ * `people` is whichever set of people this particular result belongs to —
+ * exactly one person for an individual's own view (still fully editable),
+ * or the whole household for the joint view (look-only: rates and
+ * contributions can only be tweaked one person at a time, so editing is
+ * disabled and the bonus/pension workings switch to combined phrasing).
  */
 import { useState } from 'react'
-import type {
-  ContributionOverride,
-  RateOverride,
-  WealthPlanInput,
-  WealthPlanResult,
-} from '@/lib/wealthPlan'
+import type { Person } from '@/lib/household'
+import type { ContributionOverride, RateOverride, WealthPlanResult } from '@/lib/wealthPlan'
 import { POT_LABELS } from '@/lib/wealthPlan'
 import { money, percent } from '@/lib/format'
 import { StatRow } from '@/components/StatRow'
@@ -28,7 +30,7 @@ function potSub(pot: { today: number; contributions: number }): string {
 }
 
 export function WealthPlanResults({
-  input,
+  people,
   result,
   rateOverrides,
   onOverrideChange,
@@ -39,7 +41,8 @@ export function WealthPlanResults({
   onClearContributionOverrides,
   generation,
 }: {
-  input: WealthPlanInput
+  /** exactly one person = their own editable view; 2+ = the joint, read-only view */
+  people: Person[]
   result: WealthPlanResult
   rateOverrides: RateOverride[]
   onOverrideChange: (year: number, field: 'investedRate' | 'cashRate', pct: number | undefined) => void
@@ -52,10 +55,12 @@ export function WealthPlanResults({
 }) {
   const [editingYear, setEditingYear] = useState<number | null>(null)
   const editingOverride = contributionOverrides.find((o) => o.year === editingYear)
-  const years = Math.max(0, result.targetAge - input.age)
+  const isJoint = people.length > 1
+  const anchorAge = result.yearly[0]!.age
+  const years = Math.max(0, result.targetAge - anchorAge)
   const marketLeads = result.marketAdds > result.whatYouPutIn
-  const crossoverAge =
-    result.crossoverYear !== null ? input.age + result.crossoverYear : null
+  const crossoverAge = result.crossoverYear !== null ? anchorAge + result.crossoverYear : null
+  const totalBonus = people.reduce((s, p) => s + p.bonus, 0)
 
   return (
     <div className="space-y-6">
@@ -173,15 +178,25 @@ export function WealthPlanResults({
       </div>
 
       {/* transparency on where the bonus goes — a real modelling choice, never silent */}
-      {input.bonus > 0 ? (
+      {!isJoint && people[0]!.bonus > 0 ? (
         <div className="rounded-2xl bg-accent/40 px-5 py-4">
           <p className="text-[13px] leading-relaxed text-foreground/80">
-            Your expected {money(input.bonus)} annual bonus is counted as part of
-            what you put in, added to your{' '}
+            Your expected {money(people[0]!.bonus)} annual bonus is counted as
+            part of what you put in, added to your{' '}
             <span className="font-semibold text-foreground">
-              {POT_LABELS[input.bonusTarget].toLowerCase()}
+              {POT_LABELS[people[0]!.bonusTarget].toLowerCase()}
             </span>{' '}
             at the end of each year — change that above if it should go elsewhere.
+          </p>
+        </div>
+      ) : null}
+      {isJoint && totalBonus > 0 ? (
+        <div className="rounded-2xl bg-accent/40 px-5 py-4">
+          <p className="text-[13px] leading-relaxed text-foreground/80">
+            Between everyone, an expected{' '}
+            <span className="font-semibold text-foreground">{money(totalBonus)}</span>{' '}
+            in annual bonuses is counted as part of what's put in each year —
+            switch to someone's own name above to see exactly where theirs goes.
           </p>
         </div>
       ) : null}
@@ -210,12 +225,13 @@ export function WealthPlanResults({
         onEditYear={setEditingYear}
         onClearContributionOverrides={onClearContributionOverrides}
         generation={generation}
+        editable={!isJoint}
       />
 
-      {editingYear !== null ? (
+      {editingYear !== null && !isJoint ? (
         <ContributionModal
-          age={input.age + editingYear}
-          input={input}
+          age={people[0]!.age + editingYear}
+          input={people[0]!}
           override={editingOverride}
           onSave={(values) => onContributionSave(editingYear, values)}
           onClear={() => onContributionClear(editingYear)}
@@ -230,15 +246,25 @@ export function WealthPlanResults({
             formula={`Pension and ISA stocks & shares grow at ${percent(result.assumptions.investedRate)} a year; ISA cash and cash savings grow at ${percent(result.assumptions.cashRate)} a year — both set in the assumptions section above. Compounded monthly to age ${result.targetAge}.`}
             numbers={`pension ${money(result.pots.pension.future)} + ISA stocks & shares ${money(result.pots.isaStocks.future)} + ISA cash ${money(result.pots.isaCash.future)} + cash savings ${money(result.pots.cashSavings.future)} = ${money(result.projectedTotal)}`}
           />
-          {result.pensionMonthly > 0 ? (
+          {!isJoint && result.pensionMonthly > 0 ? (
             <Working
               formula="Your pension contribution is your salary × the percentage you entered, every month."
-              numbers={`${money(input.salary)} × ${percent(input.pensionPct)} ÷ 12 = ${money(result.pensionMonthly)}/month`}
+              numbers={`${money(people[0]!.salary)} × ${percent(people[0]!.pensionPct)} ÷ 12 = ${money(result.pensionMonthly)}/month`}
+            />
+          ) : !isJoint ? (
+            <Working
+              formula="No pension contribution is included in this forecast."
+              numbers="add your salary and a contribution percentage above to include one"
+            />
+          ) : result.pensionMonthly > 0 ? (
+            <Working
+              formula="Each person's pension contribution is their own salary × their own percentage, every month — summed here."
+              numbers={`${money(result.pensionMonthly)}/month combined`}
             />
           ) : (
             <Working
               formula="No pension contribution is included in this forecast."
-              numbers="add your salary and a contribution percentage above to include one"
+              numbers="add a salary and a contribution percentage for at least one person to include one"
             />
           )}
           <Working

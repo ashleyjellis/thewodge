@@ -12,9 +12,11 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
+import type { Person } from '@/lib/household'
 import { POT_KEYS, POT_LABELS, type PotKey } from '@/lib/wealthPlan'
-import { rateToPct, type WealthPlanSearch } from '@/lib/wealthPlanSearch'
+import { MAX_PEOPLE, rateToPct, type WealthPlanSearch } from '@/lib/wealthPlanSearch'
 import { CASH_RATE, INVESTED_RATE, TARGET_AGE } from '@/config'
+import { money, percent } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 const DEFAULT_INVESTED_PCT = rateToPct(INVESTED_RATE)
@@ -88,11 +90,18 @@ export function WealthPlanForm({
   onSubmit,
   submitLabel = 'See your plan',
   className,
+  additionalPeople,
+  onAddPerson,
+  onEditPerson,
 }: {
   initial: WealthPlanSearch
   onSubmit: (values: WealthPlanSearch) => void
   submitLabel?: string
   className?: string
+  /** everyone but "You" — person 1 is this form itself */
+  additionalPeople: Person[]
+  onAddPerson: () => void
+  onEditPerson: (id: string) => void
 }) {
   const [f, setF] = useState<FieldState>(() => toFieldState(initial))
   const set = (k: keyof Omit<FieldState, 'bonusTarget'>) => (v: string) =>
@@ -217,6 +226,19 @@ export function WealthPlanForm({
           />
         </Section>
 
+        <Section title="People" hint="optional — plan for more than yourself" cols={1}>
+          {additionalPeople.map((p) => (
+            <PersonSummaryCard key={p.id} person={p} onEdit={() => onEditPerson(p.id)} />
+          ))}
+          {additionalPeople.length < MAX_PEOPLE - 1 ? (
+            <AddPersonTile onClick={onAddPerson} />
+          ) : (
+            <p className="text-[12px] text-muted-foreground">
+              Up to {MAX_PEOPLE} people at once.
+            </p>
+          )}
+        </Section>
+
         <Section
           title="Assumptions"
           hint={
@@ -259,7 +281,9 @@ export function WealthPlanForm({
   )
 }
 
-function Section({
+/** Shared with PersonModal, which builds the same section-grouped layout for
+ *  an additional person's own numbers. */
+export function Section({
   title,
   hint,
   cols = 2,
@@ -268,7 +292,8 @@ function Section({
 }: {
   title: string
   hint?: ReactNode
-  cols?: 2 | 3
+  /** 1 = stacked full-width (e.g. a list of cards), not a field grid */
+  cols?: 1 | 2 | 3
   /** renders as a closed-by-default <details> — for optional, advanced fields */
   collapsible?: boolean
   children: ReactNode
@@ -286,7 +311,8 @@ function Section({
   const grid = (
     <div
       className={cn(
-        'mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2',
+        'mt-3 grid grid-cols-1 gap-3',
+        cols >= 2 && 'sm:grid-cols-2',
         cols === 3 && 'lg:grid-cols-3',
       )}
     >
@@ -315,6 +341,54 @@ function Section({
       {heading}
       {grid}
     </div>
+  )
+}
+
+function PersonSummaryCard({ person, onEdit }: { person: Person; onEdit: () => void }) {
+  const details: string[] = []
+  if (person.salary > 0) details.push(`Salary ${money(person.salary)}`)
+  if (person.pensionPct > 0) details.push(`${percent(person.pensionPct, 0)} pension`)
+  return (
+    <div className="rounded-2xl bg-muted px-4 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[14px] font-semibold text-foreground">{person.name}</p>
+          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+            Age {person.age} · retiring at {person.targetAge}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="shrink-0 text-[12.5px] font-medium text-foreground underline underline-offset-2 hover:opacity-70"
+        >
+          Edit
+        </button>
+      </div>
+      {details.length > 0 ? (
+        <p className="mt-2 text-[12.5px] text-muted-foreground">{details.join(' · ')}</p>
+      ) : null}
+    </div>
+  )
+}
+
+function AddPersonTile({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3.5 text-left text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-current text-[15px] leading-none">
+        +
+      </span>
+      <span>
+        <span className="block text-[13.5px] font-semibold leading-tight text-foreground">
+          Add a person
+        </span>
+        <span className="block text-[12px]">Plan for your household together</span>
+      </span>
+    </button>
   )
 }
 

@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { CASH_RATE, INVESTED_RATE, SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
-import { projectWealthPlan, type ContributionOverride, type RateOverride } from '@/lib/wealthPlan'
+import { cn } from '@/lib/cn'
+import { aggregateHousehold, type Person } from '@/lib/household'
+import type { ContributionOverride, RateOverride } from '@/lib/wealthPlan'
 import {
   canPlan,
+  peopleToSearch,
+  searchToPeople,
   toWealthPlanAssumptions,
   toWealthPlanInput,
-  toWealthPlanSearch,
   validateWealthPlanSearch,
   type WealthPlanSearch,
 } from '@/lib/wealthPlanSearch'
@@ -17,6 +20,7 @@ import { PageHeader, Prose } from '@/components/site/Page'
 import { NavLink } from '@/components/NavLink'
 import { WealthPlanForm } from '@/components/wealthPlan/WealthPlanForm'
 import { WealthPlanResults } from '@/components/wealthPlan/WealthPlanResults'
+import { PersonModal } from '@/components/wealthPlan/PersonModal'
 
 /** Shown on a cold landing (no search params at all) so the page — and crawlers —
  *  see a fully worked example rather than an empty form. Illustrative only; the
@@ -115,34 +119,89 @@ function WealthPlanningToolPage() {
   const hasAnyValue = Object.values(search).some((v) => v !== undefined)
   const effective = hasAnyValue ? search : EXAMPLE
   const ready = canPlan(effective)
+  const people = searchToPeople(effective)
+  const assumptions = toWealthPlanAssumptions(effective)
 
   // Per-year manual rate and contribution tweaks made directly in the table —
   // deliberately not part of the URL (they're exploratory, cleared by "Clear
   // manual..." or by changing the plan itself), unlike everything else on this
-  // page.
-  const [rateOverrides, setRateOverrides] = useState<RateOverride[]>([])
-  const [contributionOverrides, setContributionOverrides] = useState<ContributionOverride[]>([])
+  // page. Keyed by person id: each person's own table keeps its own tweaks,
+  // never leaking into anyone else's.
+  const [rateOverridesByPerson, setRateOverridesByPerson] = useState<Record<string, RateOverride[]>>({})
+  const [contributionOverridesByPerson, setContributionOverridesByPerson] = useState<
+    Record<string, ContributionOverride[]>
+  >({})
   // Bumped whenever the baseline changes or overrides are cleared, so the
   // table's rate cells remount and re-seed from the new default — see
   // WealthPlanYearlyTable's docstring for why that's necessary.
   const [generation, setGeneration] = useState(0)
 
-  const result = ready
-    ? projectWealthPlan(
-        { ...toWealthPlanInput(effective), rateOverrides, contributionOverrides },
-        toWealthPlanAssumptions(effective),
-      )
-    : null
+  // Which result the widgets below are showing — 'joint' (the household,
+  // combined) or one person's own id. Local UI state, not URL-persisted:
+  // switching who you're looking at isn't a change to the plan itself.
+  const [selectedPersonId, setSelectedPersonId] = useState<string>('joint')
+  const validSelectedId =
+    selectedPersonId === 'joint' || people.some((p) => p.id === selectedPersonId)
+      ? selectedPersonId
+      : 'joint'
+  const isJointView = validSelectedId === 'joint' && people.length > 1
+  const activePersonId = isJointView ? null : validSelectedId === 'joint' ? people[0]!.id : validSelectedId
+
+  // Which person's card opened the modal — 'new' for the "Add a person" tile,
+  // an id for an existing card's Edit link, null when the modal is closed.
+  const [editingPersonId, setEditingPersonId] = useState<string | 'new' | null>(null)
+  const editingPerson =
+    editingPersonId && editingPersonId !== 'new'
+      ? people.find((p) => p.id === editingPersonId)
+      : undefined
+
+  const peopleWithOverrides = people.map((p) => ({
+    ...p,
+    rateOverrides: rateOverridesByPerson[p.id] ?? [],
+    contributionOverrides: contributionOverridesByPerson[p.id] ?? [],
+  }))
+  // aggregateHousehold degenerates to a single person's own projectWealthPlan
+  // result when given just the one of them — same function either way, joint
+  // or individual, so the results components never need to know which.
+  const activePeople = isJointView
+    ? peopleWithOverrides
+    : peopleWithOverrides.filter((p) => p.id === activePersonId)
+  const result = ready && activePeople.length > 0 ? aggregateHousehold(activePeople, assumptions) : null
+
+  const activeRateOverrides = activePersonId ? (rateOverridesByPerson[activePersonId] ?? []) : []
+  const activeContributionOverrides = activePersonId
+    ? (contributionOverridesByPerson[activePersonId] ?? [])
+    : []
+
+  const navigateToPeople = (newPeople: Person[]) => {
+    setRateOverridesByPerson({})
+    setContributionOverridesByPerson({})
+    setGeneration((g) => g + 1)
+    void navigate({
+      to: '/wealth-planning-tool',
+      search: {
+        ...peopleToSearch(newPeople),
+        investedRatePct: effective.investedRatePct,
+        cashRatePct: effective.cashRatePct,
+      },
+      resetScroll: false,
+    })
+  }
 
   const onSubmit = (values: WealthPlanSearch) => {
-    setRateOverrides([])
-    setContributionOverrides([])
+    const updatedYou: Person = { ...toWealthPlanInput(values), id: people[0]!.id, name: 'You' }
+    setRateOverridesByPerson({})
+    setContributionOverridesByPerson({})
     setGeneration((g) => g + 1)
     // resetScroll: false — the router defaults to jumping scroll to the top of
     // the page on navigate, which would fight the manual scroll below.
     void navigate({
       to: '/wealth-planning-tool',
-      search: toWealthPlanSearch(values),
+      search: {
+        ...peopleToSearch([updatedYou, ...people.slice(1)]),
+        investedRatePct: values.investedRatePct,
+        cashRatePct: values.cashRatePct,
+      },
       resetScroll: false,
     }).then(() => {
       document.getElementById('plan-results')?.scrollIntoView({
@@ -152,27 +211,44 @@ function WealthPlanningToolPage() {
     })
   }
 
+  const onPersonSave = (fields: Omit<Person, 'id'>) => {
+    if (editingPersonId && editingPersonId !== 'new') {
+      navigateToPeople(people.map((p) => (p.id === editingPersonId ? { ...fields, id: p.id } : p)))
+    } else {
+      navigateToPeople([...people, { ...fields, id: `person-${people.length + 1}` }])
+    }
+  }
+
+  const onPersonRemove = () => {
+    if (editingPersonId && editingPersonId !== 'new') {
+      navigateToPeople(people.filter((p) => p.id !== editingPersonId))
+    }
+  }
+
   const onOverrideChange = (
     year: number,
     field: 'investedRate' | 'cashRate',
     pct: number | undefined,
   ) => {
-    setRateOverrides((prev) => {
-      const existing = prev.find((o) => o.year === year)
+    if (!activePersonId) return
+    const personId = activePersonId
+    setRateOverridesByPerson((prev) => {
+      const existing = (prev[personId] ?? []).find((o) => o.year === year)
       const merged: RateOverride = {
         year,
         investedRate: existing?.investedRate,
         cashRate: existing?.cashRate,
         [field]: pct,
       }
-      const rest = prev.filter((o) => o.year !== year)
+      const rest = (prev[personId] ?? []).filter((o) => o.year !== year)
       const isEmpty = merged.investedRate === undefined && merged.cashRate === undefined
-      return isEmpty ? rest : [...rest, merged]
+      return { ...prev, [personId]: isEmpty ? rest : [...rest, merged] }
     })
   }
 
   const onClearOverrides = () => {
-    setRateOverrides([])
+    if (!activePersonId) return
+    setRateOverridesByPerson((prev) => ({ ...prev, [activePersonId]: [] }))
     setGeneration((g) => g + 1)
   }
 
@@ -180,15 +256,26 @@ function WealthPlanningToolPage() {
     year: number,
     values: Omit<ContributionOverride, 'year'>,
   ) => {
-    setContributionOverrides((prev) => [...prev.filter((o) => o.year !== year), { year, ...values }])
+    if (!activePersonId) return
+    const personId = activePersonId
+    setContributionOverridesByPerson((prev) => ({
+      ...prev,
+      [personId]: [...(prev[personId] ?? []).filter((o) => o.year !== year), { year, ...values }],
+    }))
   }
 
   const onContributionClear = (year: number) => {
-    setContributionOverrides((prev) => prev.filter((o) => o.year !== year))
+    if (!activePersonId) return
+    const personId = activePersonId
+    setContributionOverridesByPerson((prev) => ({
+      ...prev,
+      [personId]: (prev[personId] ?? []).filter((o) => o.year !== year),
+    }))
   }
 
   const onClearContributionOverrides = () => {
-    setContributionOverrides([])
+    if (!activePersonId) return
+    setContributionOverridesByPerson((prev) => ({ ...prev, [activePersonId]: [] }))
     setGeneration((g) => g + 1)
   }
 
@@ -218,23 +305,36 @@ function WealthPlanningToolPage() {
             initial={effective}
             onSubmit={onSubmit}
             submitLabel={ready ? 'Update my plan' : 'See your plan'}
+            additionalPeople={people.slice(1)}
+            onAddPerson={() => setEditingPersonId('new')}
+            onEditPerson={(id) => setEditingPersonId(id)}
           />
         </div>
 
         <div id="plan-results" className="mt-12 scroll-mt-20">
           {ready && result ? (
-            <WealthPlanResults
-              input={toWealthPlanInput(effective)}
-              result={result}
-              rateOverrides={rateOverrides}
-              onOverrideChange={onOverrideChange}
-              onClearOverrides={onClearOverrides}
-              contributionOverrides={contributionOverrides}
-              onContributionSave={onContributionSave}
-              onContributionClear={onContributionClear}
-              onClearContributionOverrides={onClearContributionOverrides}
-              generation={generation}
-            />
+            <>
+              {people.length > 1 ? (
+                <PersonFilterPills
+                  people={people}
+                  selectedId={validSelectedId}
+                  onSelect={setSelectedPersonId}
+                />
+              ) : null}
+              <WealthPlanResults
+                key={validSelectedId}
+                people={activePeople}
+                result={result}
+                rateOverrides={activeRateOverrides}
+                onOverrideChange={onOverrideChange}
+                onClearOverrides={onClearOverrides}
+                contributionOverrides={activeContributionOverrides}
+                onContributionSave={onContributionSave}
+                onContributionClear={onContributionClear}
+                onClearContributionOverrides={onClearContributionOverrides}
+                generation={generation}
+              />
+            </>
           ) : (
             <div className="max-w-xl border-t border-border/60 py-10">
               <h2 className="text-[20px] font-semibold tracking-tight">
@@ -248,6 +348,15 @@ function WealthPlanningToolPage() {
           )}
         </div>
       </MaxWidthContainer>
+
+      {editingPersonId !== null ? (
+        <PersonModal
+          person={editingPerson}
+          onSave={onPersonSave}
+          onRemove={onPersonRemove}
+          onClose={() => setEditingPersonId(null)}
+        />
+      ) : null}
 
       <MaxWidthContainer className="border-t border-border/60 py-12 lg:py-16">
         <Prose>
@@ -277,5 +386,50 @@ function WealthPlanningToolPage() {
         </Prose>
       </MaxWidthContainer>
     </>
+  )
+}
+
+/** "Joint" plus one pill per person — only shown once there's someone besides
+ *  "You" to switch between. Joint is the whole household, combined and
+ *  look-only; each person's own pill is their own editable forecast. */
+function PersonFilterPills({
+  people,
+  selectedId,
+  onSelect,
+}: {
+  people: Person[]
+  selectedId: string
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div className="mb-6 flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onSelect('joint')}
+        className={cn(
+          'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
+          selectedId === 'joint'
+            ? 'bg-foreground text-primary-foreground'
+            : 'bg-muted text-muted-foreground hover:text-foreground',
+        )}
+      >
+        Joint
+      </button>
+      {people.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          onClick={() => onSelect(p.id)}
+          className={cn(
+            'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
+            selectedId === p.id
+              ? 'bg-foreground text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {p.name}
+        </button>
+      ))}
+    </div>
   )
 }
