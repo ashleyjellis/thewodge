@@ -188,6 +188,86 @@ describe('projectWealthPlan (pure, nominal)', () => {
     expect(r.yearly[2]!.pots.cashSavings.endValue).toBeCloseTo(51_000, 1)
   })
 
+  it("a salary override changes only that year's derived pension contribution", () => {
+    const r = projectWealthPlan(
+      {
+        ...BASE,
+        age: 40,
+        targetAge: 43,
+        salary: 0,
+        pensionPct: 0.1,
+        contributionOverrides: [{ year: 1, salary: 60_000 }],
+      },
+      A,
+    )
+    // year 1: overridden salary -> pension monthly = 60,000 × 0.1 ÷ 12 = 500
+    expect(r.yearly[1]!.pots.pension.contribution).toBeCloseTo(500 * 12, 1)
+    // years 2 and 3: back to the baseline salary (0) -> no pension contribution
+    expect(r.yearly[2]!.pots.pension.contribution).toBe(0)
+    expect(r.yearly[3]!.pots.pension.contribution).toBe(0)
+  })
+
+  it('a monthly contribution override changes only that year, for that pot only', () => {
+    const r = projectWealthPlan(
+      {
+        ...BASE,
+        age: 40,
+        targetAge: 43,
+        isaStocksMonthly: 100,
+        cashSavingsMonthly: 50,
+        contributionOverrides: [{ year: 2, isaStocksMonthly: 500 }],
+      },
+      A,
+    )
+    expect(r.yearly[1]!.pots.isaStocks.contribution).toBeCloseTo(100 * 12, 1)
+    expect(r.yearly[2]!.pots.isaStocks.contribution).toBeCloseTo(500 * 12, 1)
+    expect(r.yearly[3]!.pots.isaStocks.contribution).toBeCloseTo(100 * 12, 1)
+    // an unrelated pot is untouched throughout
+    expect(r.yearly[2]!.pots.cashSavings.contribution).toBeCloseTo(50 * 12, 1)
+  })
+
+  it('a bonus override can change both the amount and the target pot for one year only', () => {
+    const r = projectWealthPlan(
+      {
+        ...BASE,
+        age: 40,
+        targetAge: 43,
+        bonus: 1_000,
+        bonusTarget: 'isaStocks',
+        contributionOverrides: [{ year: 2, bonus: 5_000, bonusTarget: 'cashSavings' }],
+      },
+      A,
+    )
+    // year 1: baseline bonus still goes to isaStocks
+    expect(r.yearly[1]!.pots.isaStocks.contribution).toBeCloseTo(1_000, 1)
+    expect(r.yearly[1]!.pots.cashSavings.contribution).toBe(0)
+    // year 2: overridden bonus goes to cashSavings instead — isaStocks gets none that year
+    expect(r.yearly[2]!.pots.isaStocks.contribution).toBe(0)
+    expect(r.yearly[2]!.pots.cashSavings.contribution).toBeCloseTo(5_000, 1)
+    // year 3: back to the baseline
+    expect(r.yearly[3]!.pots.isaStocks.contribution).toBeCloseTo(1_000, 1)
+    expect(r.yearly[3]!.pots.cashSavings.contribution).toBe(0)
+  })
+
+  it('contribution and rate overrides for the same year apply independently', () => {
+    const r = projectWealthPlan(
+      {
+        ...BASE,
+        age: 40,
+        targetAge: 42,
+        isaStocks: 10_000,
+        isaStocksMonthly: 100,
+        rateOverrides: [{ year: 1, investedRate: 0 }],
+        contributionOverrides: [{ year: 1, isaStocksMonthly: 1_000 }],
+      },
+      A,
+    )
+    // year 1: 0% growth (rate override) but the contribution is the overridden £1,000/month
+    const y1 = r.yearly[1]!.pots.isaStocks
+    expect(y1.contribution).toBeCloseTo(1_000 * 12, 1)
+    expect(y1.endValue).toBeCloseTo(10_000 + 1_000 * 12, 1) // no growth, so end = start + contribution exactly
+  })
+
   it('handles age at/after target age — a single point, no growth', () => {
     const r = projectWealthPlan({ ...BASE, age: 60, targetAge: 60, pension: 50_000 }, A)
     expect(r.monthsToTarget).toBe(0)

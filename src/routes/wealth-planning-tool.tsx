@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { CASH_RATE, INVESTED_RATE, SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
-import { projectWealthPlan, type RateOverride } from '@/lib/wealthPlan'
+import { projectWealthPlan, type ContributionOverride, type RateOverride } from '@/lib/wealthPlan'
 import {
   canPlan,
   toWealthPlanAssumptions,
@@ -116,10 +116,12 @@ function WealthPlanningToolPage() {
   const effective = hasAnyValue ? search : EXAMPLE
   const ready = canPlan(effective)
 
-  // Per-year manual rate tweaks made directly in the table — deliberately not
-  // part of the URL (they're exploratory, cleared by "Clear manual rates" or by
-  // changing the plan itself), unlike everything else on this page.
+  // Per-year manual rate and contribution tweaks made directly in the table —
+  // deliberately not part of the URL (they're exploratory, cleared by "Clear
+  // manual..." or by changing the plan itself), unlike everything else on this
+  // page.
   const [rateOverrides, setRateOverrides] = useState<RateOverride[]>([])
+  const [contributionOverrides, setContributionOverrides] = useState<ContributionOverride[]>([])
   // Bumped whenever the baseline changes or overrides are cleared, so the
   // table's rate cells remount and re-seed from the new default — see
   // WealthPlanYearlyTable's docstring for why that's necessary.
@@ -127,13 +129,14 @@ function WealthPlanningToolPage() {
 
   const result = ready
     ? projectWealthPlan(
-        { ...toWealthPlanInput(effective), rateOverrides },
+        { ...toWealthPlanInput(effective), rateOverrides, contributionOverrides },
         toWealthPlanAssumptions(effective),
       )
     : null
 
   const onSubmit = (values: WealthPlanSearch) => {
     setRateOverrides([])
+    setContributionOverrides([])
     setGeneration((g) => g + 1)
     // resetScroll: false — the router defaults to jumping scroll to the top of
     // the page on navigate, which would fight the manual scroll below.
@@ -170,6 +173,22 @@ function WealthPlanningToolPage() {
 
   const onClearOverrides = () => {
     setRateOverrides([])
+    setGeneration((g) => g + 1)
+  }
+
+  const onContributionSave = (
+    year: number,
+    values: Omit<ContributionOverride, 'year'>,
+  ) => {
+    setContributionOverrides((prev) => [...prev.filter((o) => o.year !== year), { year, ...values }])
+  }
+
+  const onContributionClear = (year: number) => {
+    setContributionOverrides((prev) => prev.filter((o) => o.year !== year))
+  }
+
+  const onClearContributionOverrides = () => {
+    setContributionOverrides([])
     setGeneration((g) => g + 1)
   }
 
@@ -210,6 +229,10 @@ function WealthPlanningToolPage() {
               rateOverrides={rateOverrides}
               onOverrideChange={onOverrideChange}
               onClearOverrides={onClearOverrides}
+              contributionOverrides={contributionOverrides}
+              onContributionSave={onContributionSave}
+              onContributionClear={onContributionClear}
+              onClearContributionOverrides={onClearContributionOverrides}
               generation={generation}
             />
           ) : (

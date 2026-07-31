@@ -26,7 +26,12 @@ import { money, percent } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { Assumptions, PotYearPoint } from '@/lib/forecast'
 import { rateToPct } from '@/lib/wealthPlanSearch'
-import type { PotKey, RateOverride, WealthPlanYearPoint } from '@/lib/wealthPlan'
+import type {
+  ContributionOverride,
+  PotKey,
+  RateOverride,
+  WealthPlanYearPoint,
+} from '@/lib/wealthPlan'
 
 type RateField = 'investedRate' | 'cashRate'
 
@@ -86,6 +91,9 @@ export function WealthPlanYearlyTable({
   overrides,
   onOverrideChange,
   onClearOverrides,
+  contributionOverrides,
+  onEditYear,
+  onClearContributionOverrides,
   generation,
 }: {
   yearly: WealthPlanYearPoint[]
@@ -94,6 +102,9 @@ export function WealthPlanYearlyTable({
   overrides: RateOverride[]
   onOverrideChange: (year: number, field: RateField, pct: number | undefined) => void
   onClearOverrides: () => void
+  contributionOverrides: ContributionOverride[]
+  onEditYear: (year: number) => void
+  onClearContributionOverrides: () => void
   generation: number
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -102,6 +113,8 @@ export function WealthPlanYearlyTable({
   const lastAge = yearly[yearly.length - 1]?.age
   const overrideByYear = new Map(overrides.map((o) => [o.year, o]))
   const hasOverrides = overrides.length > 0
+  const contributionOverrideYears = new Set(contributionOverrides.map((o) => o.year))
+  const hasContributionOverrides = contributionOverrides.length > 0
   const rateField = CATEGORY_RATE_FIELD[category]
 
   return (
@@ -113,8 +126,8 @@ export function WealthPlanYearlyTable({
             Ending position for every pot, every year to {lastAge}, plus what you
             put in (including any bonus) and what grew that year — assuming{' '}
             {percent(assumptions.investedRate)} a year on investments and pension,{' '}
-            {percent(assumptions.cashRate)} a year on cash. Edit either rate for
-            any year directly in the table.
+            {percent(assumptions.cashRate)} a year on cash. Edit either rate, or
+            click a year's "put in" to change its contributions.
           </>
         ) : (
           <>
@@ -124,7 +137,8 @@ export function WealthPlanYearlyTable({
               ? ' Edit the invested rate for any year — pension and investments share this assumption, so it changes both.'
               : rateField === 'cashRate'
                 ? ' Edit the cash rate for any year directly in the table.'
-                : null}
+                : null}{' '}
+            Click a year's "put in" to change its contributions.
           </>
         )}
       </p>
@@ -151,7 +165,7 @@ export function WealthPlanYearlyTable({
         ) : (
           <div />
         )}
-        <div className="flex shrink-0 items-center gap-4">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5">
           {hasOverrides ? (
             <button
               type="button"
@@ -159,6 +173,15 @@ export function WealthPlanYearlyTable({
               className="text-[12px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
               Clear manual rates
+            </button>
+          ) : null}
+          {hasContributionOverrides ? (
+            <button
+              type="button"
+              onClick={onClearContributionOverrides}
+              className="text-[12px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Clear manual contributions
             </button>
           ) : null}
           <button
@@ -179,6 +202,8 @@ export function WealthPlanYearlyTable({
             overrideByYear={overrideByYear}
             assumptions={assumptions}
             onOverrideChange={onOverrideChange}
+            contributionOverrideYears={contributionOverrideYears}
+            onEditYear={onEditYear}
             generation={generation}
           />
         ) : (
@@ -190,6 +215,8 @@ export function WealthPlanYearlyTable({
             category={category}
             rateField={rateField}
             onOverrideChange={onOverrideChange}
+            contributionOverrideYears={contributionOverrideYears}
+            onEditYear={onEditYear}
             generation={generation}
           />
         )}
@@ -197,9 +224,11 @@ export function WealthPlanYearlyTable({
 
       <p className="mt-4 text-[12px] text-muted-foreground">
         “Put in” is every contribution that pot received that year, including a
-        bonus if you aimed one at it. “Grew” is everything above that — the
-        market’s share, not yours. Highlighted rate cells have been manually
-        edited for that year only; every other year still follows the assumption.
+        bonus if you aimed one at it — click it to change that year's income,
+        monthly contributions, or additional contribution. “Grew” is everything
+        above that — the market’s share, not yours. Highlighted cells have been
+        manually edited for that year only; every other year still follows the
+        plan above.
       </p>
     </div>
   )
@@ -213,6 +242,8 @@ function CondensedTable({
   category,
   rateField,
   onOverrideChange,
+  contributionOverrideYears,
+  onEditYear,
   generation,
 }: {
   yearly: WealthPlanYearPoint[]
@@ -222,6 +253,8 @@ function CondensedTable({
   category: TableCategory
   rateField: RateField | null
   onOverrideChange: (year: number, field: RateField, pct: number | undefined) => void
+  contributionOverrideYears: Set<number>
+  onEditYear: (year: number) => void
   generation: number
 }) {
   return (
@@ -283,8 +316,13 @@ function CondensedTable({
               <td className="py-2 pr-1.5 text-right text-muted-foreground">
                 {money(point.startValue)}
               </td>
-              <td className="py-2 pr-1.5 text-right text-muted-foreground">
-                {p.year === 0 ? '—' : money(point.contribution)}
+              <td className="py-2 pr-1.5 text-right">
+                <PutInCell
+                  year={p.year}
+                  value={point.contribution}
+                  overridden={contributionOverrideYears.has(p.year)}
+                  onClick={() => onEditYear(p.year)}
+                />
               </td>
               <td className="py-2 pr-1.5 text-right text-muted-foreground">
                 {p.year === 0 ? '—' : money(point.growth)}
@@ -306,6 +344,8 @@ function ExpandedTable({
   overrideByYear,
   assumptions,
   onOverrideChange,
+  contributionOverrideYears,
+  onEditYear,
   generation,
 }: {
   yearly: WealthPlanYearPoint[]
@@ -313,6 +353,8 @@ function ExpandedTable({
   overrideByYear: Map<number, RateOverride>
   assumptions: Assumptions
   onOverrideChange: (year: number, field: RateField, pct: number | undefined) => void
+  contributionOverrideYears: Set<number>
+  onEditYear: (year: number) => void
   generation: number
 }) {
   return (
@@ -386,8 +428,13 @@ function ExpandedTable({
               <td className="py-2 pr-2.5 text-right font-semibold text-foreground">
                 {money(p.total.endValue)}
               </td>
-              <td className="py-2 pr-2.5 text-right text-muted-foreground">
-                {p.year === 0 ? '—' : money(p.total.contribution)}
+              <td className="py-2 pr-2.5 text-right">
+                <PutInCell
+                  year={p.year}
+                  value={p.total.contribution}
+                  overridden={contributionOverrideYears.has(p.year)}
+                  onClick={() => onEditYear(p.year)}
+                />
               </td>
               <td className="py-2 text-right text-muted-foreground">
                 {p.year === 0 ? '—' : money(p.total.growth)}
@@ -397,6 +444,37 @@ function ExpandedTable({
         })}
       </tbody>
     </table>
+  )
+}
+
+/** Opens the per-year contribution editor. Shown for every row except year 0,
+ *  which has no contribution to edit. Underlined to read as tappable, and
+ *  picked out in the accent colour when that year has a saved override. */
+function PutInCell({
+  year,
+  value,
+  overridden,
+  onClick,
+}: {
+  year: number
+  value: number
+  overridden: boolean
+  onClick: () => void
+}) {
+  if (year === 0) return <span className="text-muted-foreground">—</span>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'underline decoration-dotted underline-offset-4 transition-colors hover:decoration-solid',
+        overridden
+          ? 'font-semibold text-foreground decoration-accent hover:decoration-accent'
+          : 'text-muted-foreground decoration-muted-foreground/50 hover:text-foreground hover:decoration-foreground',
+      )}
+    >
+      {money(value)}
+    </button>
   )
 }
 

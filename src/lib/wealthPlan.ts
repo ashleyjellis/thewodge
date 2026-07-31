@@ -17,6 +17,13 @@
  * year's rate; the balance effect still carries forward through ordinary
  * compounding, exactly like a real rate change would.
  *
+ * The same idea applies to contributions (contributionOverrides): salary, each
+ * pot's monthly contribution, and the bonus (amount and target) can all be
+ * overridden for one specific year — "I expect a pay rise in year 5" — without
+ * touching the baseline used everywhere else. A salary override for a year also
+ * changes that year's derived pension contribution, since pension is always
+ * salary × pensionPct ÷ 12.
+ *
  * Reuses forecast.ts's compounding primitives rather than duplicating them, but
  * keeps its own input/result shapes: this page's four named pots don't fit the
  * three-pot ForecastInput/ForecastResult used by the free calculator and /results,
@@ -40,6 +47,19 @@ export type RateOverride = {
   year: number
   investedRate?: number
   cashRate?: number
+}
+
+/** A manual contribution override for one specific year — mirrors the same
+ *  fields collected in the form. Leaving a field out means that value keeps
+ *  using the baseline for that year. */
+export type ContributionOverride = {
+  year: number
+  salary?: number
+  isaStocksMonthly?: number
+  isaCashMonthly?: number
+  cashSavingsMonthly?: number
+  bonus?: number
+  bonusTarget?: PotKey
 }
 
 export const POT_KEYS: PotKey[] = ['pension', 'isaStocks', 'isaCash', 'cashSavings']
@@ -70,6 +90,8 @@ export type WealthPlanInput = {
   bonusTarget: PotKey
   /** per-year manual rate tweaks — see RateOverride */
   rateOverrides?: RateOverride[]
+  /** per-year manual contribution tweaks — see ContributionOverride */
+  contributionOverrides?: ContributionOverride[]
 }
 
 export type WealthPlanYearPoint = {
@@ -109,22 +131,26 @@ const zeroPoint = (v: number): PotYearPoint => ({
 /**
  * One pot's full year-by-year path: a level monthly contribution, compounded a
  * year at a time, with an optional lump sum (the bonus) added at the end of every
- * year. Chaining whole-year compounding this way lands on the same totals as
- * forecast.ts's closed-form projection when annualLump is 0 — this file only
- * iterates because the bonus needs a year boundary to land on.
+ * year. Both the monthly contribution and the lump can vary by year (contribution
+ * overrides), same idea as the rate callback below. Chaining whole-year
+ * compounding this way lands on the same totals as forecast.ts's closed-form
+ * projection when nothing varies — this file only iterates because a lump needs a
+ * year boundary to land on.
  */
 function projectPotYearly(
   today: number,
-  monthly: number,
+  monthlyForYear: (year: number) => number,
   rateForYear: (year: number) => number,
   years: number,
-  annualLump: number,
+  annualLumpForYear: (year: number) => number,
 ): PotYearPoint[] {
   const points: PotYearPoint[] = [zeroPoint(today)]
   let balance = today
   for (let y = 1; y <= years; y++) {
     const start = balance
     const m = monthlyRate(rateForYear(y))
+    const monthly = monthlyForYear(y)
+    const annualLump = annualLumpForYear(y)
     const grownBeforeLump =
       futureValueLump(start, m, 12) + futureValueContributions(monthly, m, 12)
     const contribution = monthly * 12 + annualLump
@@ -181,40 +207,60 @@ export function projectWealthPlan(
   const cashSavingsMonthly = clampMoney(input.cashSavingsMonthly)
 
   const bonusAnnual = clampMoney(input.bonus)
-  const bonusFor = (key: PotKey) => (input.bonusTarget === key ? bonusAnnual : 0)
 
-  const overridesByYear = new Map<number, RateOverride>()
-  for (const o of input.rateOverrides ?? []) overridesByYear.set(o.year, o)
-  const investedRateForYear = (y: number) => overridesByYear.get(y)?.investedRate ?? a.investedRate
-  const cashRateForYear = (y: number) => overridesByYear.get(y)?.cashRate ?? a.cashRate
+  const rateOverridesByYear = new Map<number, RateOverride>()
+  for (const o of input.rateOverrides ?? []) rateOverridesByYear.set(o.year, o)
+  const investedRateForYear = (y: number) =>
+    rateOverridesByYear.get(y)?.investedRate ?? a.investedRate
+  const cashRateForYear = (y: number) => rateOverridesByYear.get(y)?.cashRate ?? a.cashRate
+
+  const contribOverridesByYear = new Map<number, ContributionOverride>()
+  for (const o of input.contributionOverrides ?? []) contribOverridesByYear.set(o.year, o)
+
+  const salaryForYear = (y: number) =>
+    clampMoney(contribOverridesByYear.get(y)?.salary ?? input.salary)
+  const pensionMonthlyForYear = (y: number) =>
+    clampMoney((salaryForYear(y) * clampMoney(input.pensionPct)) / 12)
+  const isaStocksMonthlyForYear = (y: number) =>
+    clampMoney(contribOverridesByYear.get(y)?.isaStocksMonthly ?? isaStocksMonthly)
+  const isaCashMonthlyForYear = (y: number) =>
+    clampMoney(contribOverridesByYear.get(y)?.isaCashMonthly ?? isaCashMonthly)
+  const cashSavingsMonthlyForYear = (y: number) =>
+    clampMoney(contribOverridesByYear.get(y)?.cashSavingsMonthly ?? cashSavingsMonthly)
+  const bonusForYear = (y: number) =>
+    clampMoney(contribOverridesByYear.get(y)?.bonus ?? bonusAnnual)
+  const bonusTargetForYear = (y: number) =>
+    contribOverridesByYear.get(y)?.bonusTarget ?? input.bonusTarget
+  const lumpForYear = (key: PotKey) => (y: number) =>
+    bonusTargetForYear(y) === key ? bonusForYear(y) : 0
 
   const pensionYearly = projectPotYearly(
     pensionToday,
-    pensionMonthly,
+    pensionMonthlyForYear,
     investedRateForYear,
     years,
-    bonusFor('pension'),
+    lumpForYear('pension'),
   )
   const isaStocksYearly = projectPotYearly(
     isaStocksToday,
-    isaStocksMonthly,
+    isaStocksMonthlyForYear,
     investedRateForYear,
     years,
-    bonusFor('isaStocks'),
+    lumpForYear('isaStocks'),
   )
   const isaCashYearly = projectPotYearly(
     isaCashToday,
-    isaCashMonthly,
+    isaCashMonthlyForYear,
     cashRateForYear,
     years,
-    bonusFor('isaCash'),
+    lumpForYear('isaCash'),
   )
   const cashSavingsYearly = projectPotYearly(
     cashSavingsToday,
-    cashSavingsMonthly,
+    cashSavingsMonthlyForYear,
     cashRateForYear,
     years,
-    bonusFor('cashSavings'),
+    lumpForYear('cashSavings'),
   )
 
   const yearly: WealthPlanYearPoint[] = []

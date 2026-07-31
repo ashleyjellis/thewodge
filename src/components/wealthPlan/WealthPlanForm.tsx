@@ -351,7 +351,8 @@ function BonusTargetPicker({
   )
 }
 
-function Field({
+/** Shared with ContributionModal, which asks for the same shape of numbers. */
+export function Field({
   label,
   hint,
   prefix,

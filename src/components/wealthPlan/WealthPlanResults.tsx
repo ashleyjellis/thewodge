@@ -5,7 +5,13 @@
  * "on track / behind" language anywhere — same rules as the free calculator's
  * results, applied to four named pots instead of three.
  */
-import type { RateOverride, WealthPlanInput, WealthPlanResult } from '@/lib/wealthPlan'
+import { useState } from 'react'
+import type {
+  ContributionOverride,
+  RateOverride,
+  WealthPlanInput,
+  WealthPlanResult,
+} from '@/lib/wealthPlan'
 import { POT_LABELS } from '@/lib/wealthPlan'
 import { money, percent } from '@/lib/format'
 import { StatRow } from '@/components/StatRow'
@@ -13,6 +19,7 @@ import { StackedBar } from '@/components/StackedBar'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { NavLink } from '@/components/NavLink'
 import { WealthPlanYearlyTable } from './WealthPlanYearlyTable'
+import { ContributionModal } from './ContributionModal'
 
 function potSub(pot: { today: number; contributions: number }): string {
   return pot.contributions > 0
@@ -26,6 +33,10 @@ export function WealthPlanResults({
   rateOverrides,
   onOverrideChange,
   onClearOverrides,
+  contributionOverrides,
+  onContributionSave,
+  onContributionClear,
+  onClearContributionOverrides,
   generation,
 }: {
   input: WealthPlanInput
@@ -33,8 +44,14 @@ export function WealthPlanResults({
   rateOverrides: RateOverride[]
   onOverrideChange: (year: number, field: 'investedRate' | 'cashRate', pct: number | undefined) => void
   onClearOverrides: () => void
+  contributionOverrides: ContributionOverride[]
+  onContributionSave: (year: number, values: Omit<ContributionOverride, 'year'>) => void
+  onContributionClear: (year: number) => void
+  onClearContributionOverrides: () => void
   generation: number
 }) {
+  const [editingYear, setEditingYear] = useState<number | null>(null)
+  const editingOverride = contributionOverrides.find((o) => o.year === editingYear)
   const years = Math.max(0, result.targetAge - input.age)
   const marketLeads = result.marketAdds > result.whatYouPutIn
   const crossoverAge =
@@ -189,8 +206,22 @@ export function WealthPlanResults({
         overrides={rateOverrides}
         onOverrideChange={onOverrideChange}
         onClearOverrides={onClearOverrides}
+        contributionOverrides={contributionOverrides}
+        onEditYear={setEditingYear}
+        onClearContributionOverrides={onClearContributionOverrides}
         generation={generation}
       />
+
+      {editingYear !== null ? (
+        <ContributionModal
+          age={input.age + editingYear}
+          input={input}
+          override={editingOverride}
+          onSave={(values) => onContributionSave(editingYear, values)}
+          onClear={() => onContributionClear(editingYear)}
+          onClose={() => setEditingYear(null)}
+        />
+      ) : null}
 
       {/* visible workings */}
       <div className="rounded-3xl bg-card p-7 shadow-soft">
