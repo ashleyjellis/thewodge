@@ -138,8 +138,14 @@ function WealthPlanningToolPage() {
 
   // Which result the widgets below are showing — 'joint' (the household,
   // combined) or one person's own id. Local UI state, not URL-persisted:
-  // switching who you're looking at isn't a change to the plan itself.
-  const [selectedPersonId, setSelectedPersonId] = useState<string>('joint')
+  // switching who you're looking at isn't a change to the plan itself. Seeded
+  // from whatever's true on first render only: a link shared with 2+ people
+  // already in it opens on Joint, but adding a person mid-session never
+  // silently switches you away from whoever you were just editing — that
+  // only happens if you tap "Joint" yourself.
+  const [selectedPersonId, setSelectedPersonId] = useState<string>(() =>
+    people.length > 1 ? 'joint' : people[0]!.id,
+  )
   const validSelectedId =
     selectedPersonId === 'joint' || people.some((p) => p.id === selectedPersonId)
       ? selectedPersonId

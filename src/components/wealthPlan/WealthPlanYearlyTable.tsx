@@ -124,7 +124,7 @@ export function WealthPlanYearlyTable({
   return (
     <div className="rounded-3xl bg-card p-7 shadow-soft">
       <h2 className="text-[15px] font-semibold tracking-tight">Year by year</h2>
-      <p className="mt-2 max-w-lg text-[13px] text-muted-foreground">
+      <p className="mt-2 text-[13px] text-muted-foreground">
         {expanded ? (
           <>
             Ending position for every pot, every year to {lastAge}, plus what you
@@ -290,7 +290,7 @@ function CondensedTable({
           <th className="sticky left-0 z-20 border-r border-border bg-card py-2 pr-1.5 font-medium">
             Age
           </th>
-          {rateField ? <th className="py-2 pr-1.5 font-medium">Rate</th> : null}
+          {rateField ? <th className="py-2 pl-2 pr-1.5 font-medium">Rate</th> : null}
           <th className="py-2 pr-1.5 text-right font-medium">Starting</th>
           <th className="py-2 pr-1.5 text-right font-medium">Put in</th>
           <th className="py-2 pr-1.5 text-right font-medium">Grew</th>
@@ -326,7 +326,7 @@ function CondensedTable({
                 ) : null}
               </td>
               {rateField ? (
-                <td className="py-1.5 pr-1.5">
+                <td className="py-1.5 pl-2 pr-1.5">
                   {p.year === 0 || ratePct === null ? (
                     <span className="text-muted-foreground">—</span>
                   ) : editable ? (
@@ -395,7 +395,7 @@ function ExpandedTable({
           <th className="sticky left-0 z-20 border-r border-border bg-card py-2 pr-2.5 font-medium">
             Age
           </th>
-          <th className="py-2 pr-2.5 font-medium">Invested</th>
+          <th className="py-2 pl-2 pr-2.5 font-medium">Invested</th>
           <th className="py-2 pr-2.5 font-medium">Cash</th>
           <th className="py-2 pr-2.5 text-right font-medium">Pension</th>
           <th className="py-2 pr-2.5 text-right font-medium">ISA S&amp;S</th>
@@ -420,7 +420,7 @@ function ExpandedTable({
                   </span>
                 ) : null}
               </td>
-              <td className="py-1.5 pr-2.5">
+              <td className="py-1.5 pl-2 pr-2.5">
                 {p.year === 0 ? (
                   <span className="text-muted-foreground">—</span>
                 ) : editable ? (

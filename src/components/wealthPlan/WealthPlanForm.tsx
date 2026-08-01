@@ -450,7 +450,10 @@ export function Field({
   // strip commas so "120,000" pastes cleanly
   const handle = (raw: string) => onChange(raw.replace(/,/g, ''))
   return (
-    <label className={cn('flex h-full flex-col', className)}>
+    // justify-end (not a fixed top margin) so a taller neighbour's wrapped
+    // hint pushes this label down rather than leaving the input boxes across
+    // a row at different heights
+    <label className={cn('flex h-full flex-col justify-end', className)}>
       <span className="text-[12.5px] font-medium leading-snug text-foreground">
         {label}
         {hint ? (
