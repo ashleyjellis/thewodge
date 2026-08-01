@@ -79,7 +79,7 @@ export function SiteHeader() {
                   to={item.to}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    'rounded-xl px-3 py-3 text-[15px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                    'rounded-xl px-3 py-3 text-[14px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
                   )}
                 >
                   {item.label}
