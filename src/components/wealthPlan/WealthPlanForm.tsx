@@ -21,7 +21,7 @@
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import type { Person } from '@/lib/household'
 import { MAX_PEOPLE } from '@/lib/wealthPlanSearch'
 import { rateToPct } from '@/lib/wealthPlanSearch'
@@ -69,7 +69,8 @@ export function WealthPlanForm({
 
   return (
     <div className={cn('@container rounded-3xl bg-card p-5 shadow-soft sm:p-6', className)}>
-      <div className="space-y-6">
+      <h2 className="text-[20px] font-semibold tracking-tight">Build Your Plan</h2>
+      <div className="mt-5 space-y-6">
         <div className="space-y-2.5">
           {people.map((p) => (
             <PersonRow
@@ -122,6 +123,17 @@ export function WealthPlanForm({
         cashRatePct={cashRatePct}
         onSave={onSaveAssumptions}
       />
+
+      <button
+        type="button"
+        onClick={() =>
+          document.getElementById('plan-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 py-3.5 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-95"
+      >
+        Create your plan
+        <ArrowRight size={16} strokeWidth={2.25} />
+      </button>
     </div>
   )
 }

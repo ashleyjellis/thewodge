@@ -310,18 +310,20 @@ function WealthPlanningToolPage() {
       <div className="bg-background px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4 lg:px-5 lg:pb-5 lg:pt-5">
         <div className="relative overflow-hidden rounded-[1.75rem] bg-[url('/wealth-plan-hero-texture.webp')] bg-cover bg-center sm:rounded-[2.25rem]">
           <MaxWidthContainer className="pb-12 pt-10 lg:pb-16 lg:pt-14">
-            <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-14">
+            <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-x-40 lg:gap-y-14">
               <div className="max-w-xl">
                 <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Pension · ISAs · cash, planned together
+                  60 secs for a full financial view
                 </p>
                 <h1 className="mt-3 text-[36px] font-semibold leading-[1.1] tracking-tight">
-                  Plan Your Wealth: Pension, ISAs and Cash, Forecast Together
+                  You've spent a decade building your wealth. See what it's actually
+                  worth.
                 </h1>
                 <p className="mt-5 text-[17px] leading-relaxed text-muted-foreground">
-                  Salary, pension, an ISA split by cash and stocks &amp; shares, plain
-                  cash savings, even an expected bonus — enter what you actually hold
-                  and add, and see exactly where it leads, year by year.
+                  See your pension, ISAs &amp; cash together — today's position and
+                  tomorrow's trajectory. Nothing to guess at, nothing missed. A
+                  planning tool, not advice: the numbers, and the confidence, are
+                  yours.
                 </p>
               </div>
 
