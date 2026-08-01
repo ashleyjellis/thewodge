@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Pencil } from 'lucide-react'
 import { CASH_RATE, INVESTED_RATE, SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
 import { cn } from '@/lib/cn'
@@ -15,10 +16,11 @@ import {
 } from '@/lib/wealthPlanSearch'
 import { percent } from '@/lib/format'
 import { MaxWidthContainer } from '@/components/site/Container'
-import { PageHeader, Prose } from '@/components/site/Page'
+import { Prose } from '@/components/site/Page'
 import { NavLink } from '@/components/NavLink'
 import { WealthPlanForm } from '@/components/wealthPlan/WealthPlanForm'
 import { WealthPlanResults } from '@/components/wealthPlan/WealthPlanResults'
+import { PersonEditModal } from '@/components/wealthPlan/PersonEditModal'
 
 /** Shown on a cold landing (no search params at all) so the page — and crawlers —
  *  see a fully worked example rather than an empty form. Illustrative only; the
@@ -163,6 +165,13 @@ function WealthPlanningToolPage() {
       ? formPersonId
       : people[0]!.id
 
+  // Which person the sticky results bar's quick-edit popup is open for — a
+  // third, independent selection concept again: editing from here shouldn't
+  // collapse or reopen anything in the form above, so it gets its own state
+  // rather than reusing formPersonId.
+  const [editingResultPersonId, setEditingResultPersonId] = useState<string | null>(null)
+  const editingResultPerson = people.find((p) => p.id === editingResultPersonId)
+
   const peopleWithOverrides = people.map((p) => ({
     ...p,
     rateOverrides: rateOverridesByPerson[p.id] ?? [],
@@ -227,6 +236,13 @@ function WealthPlanningToolPage() {
     setFormPersonId(null)
   }
 
+  // Saving from the sticky bar's quick-edit popup — deliberately doesn't
+  // touch formPersonId or scroll anywhere, since you're already looking at
+  // results and the form above should stay exactly as you left it.
+  const onResultPersonSave = (id: string, fields: Omit<Person, 'id'>) => {
+    navigateToPeople(people.map((p) => (p.id === id ? { ...fields, id: p.id } : p)))
+  }
+
   const onSaveAssumptions = (investedRatePct: number | undefined, cashRatePct: number | undefined) => {
     navigateToPeople(people, { investedRatePct, cashRatePct })
   }
@@ -287,50 +303,55 @@ function WealthPlanningToolPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Pension · ISAs · cash, planned together"
-        title="Plan your wealth: pension, ISAs and cash, forecast together"
-        intro={
-          <p>
-            Salary, pension, an ISA split by cash and stocks &amp; shares, plain
-            cash savings, even an expected bonus — enter what you actually hold and
-            add, and see exactly where it leads, year by year.
-          </p>
-        }
-      />
+      <MaxWidthContainer className="pb-12 pt-16 lg:pb-16 lg:pt-20">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-14">
+          <div className="max-w-xl">
+            <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Pension · ISAs · cash, planned together
+            </p>
+            <h1 className="mt-3 text-[36px] font-semibold leading-[1.1] tracking-tight">
+              Plan your wealth: pension, ISAs and cash, forecast together
+            </h1>
+            <p className="mt-5 text-[17px] leading-relaxed text-muted-foreground">
+              Salary, pension, an ISA split by cash and stocks &amp; shares, plain
+              cash savings, even an expected bonus — enter what you actually hold
+              and add, and see exactly where it leads, year by year.
+            </p>
+          </div>
 
-      <MaxWidthContainer className="py-12 lg:py-16">
-        <div>
-          {!hasAnyValue ? (
-            <div className="mb-6 max-w-2xl rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
-              This is a worked example so you can see the plan in action — change
-              any number below and it becomes yours.
-            </div>
-          ) : null}
-          <WealthPlanForm
-            people={people}
-            activePersonId={validFormPersonId}
-            onSelectPerson={setFormPersonId}
-            onSavePerson={onFormSavePerson}
-            onAddPerson={onFormAddPerson}
-            onRemovePerson={onFormRemovePerson}
-            ready={ready}
-            investedRatePct={effective.investedRatePct}
-            cashRatePct={effective.cashRatePct}
-            onSaveAssumptions={onSaveAssumptions}
-          />
+          <div>
+            {!hasAnyValue ? (
+              <div className="mb-6 rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
+                This is a worked example so you can see the plan in action —
+                change any number below and it becomes yours.
+              </div>
+            ) : null}
+            <WealthPlanForm
+              people={people}
+              activePersonId={validFormPersonId}
+              onSelectPerson={setFormPersonId}
+              onSavePerson={onFormSavePerson}
+              onAddPerson={onFormAddPerson}
+              onRemovePerson={onFormRemovePerson}
+              ready={ready}
+              investedRatePct={effective.investedRatePct}
+              cashRatePct={effective.cashRatePct}
+              onSaveAssumptions={onSaveAssumptions}
+            />
+          </div>
         </div>
+      </MaxWidthContainer>
 
-        <div id="plan-results" className="mt-12 scroll-mt-20">
+      <MaxWidthContainer className="pb-12 lg:pb-16">
+        <div id="plan-results" className="scroll-mt-20">
           {ready && result ? (
             <>
-              {people.length > 1 ? (
-                <PersonFilterPills
-                  people={people}
-                  selectedId={validSelectedId}
-                  onSelect={setSelectedPersonId}
-                />
-              ) : null}
+              <StickyResultsBar
+                people={people}
+                selectedId={validSelectedId}
+                onSelect={setSelectedPersonId}
+                onEditPerson={setEditingResultPersonId}
+              />
               <WealthPlanResults
                 key={validSelectedId}
                 people={activePeople}
@@ -358,6 +379,14 @@ function WealthPlanningToolPage() {
           )}
         </div>
       </MaxWidthContainer>
+
+      {editingResultPerson ? (
+        <PersonEditModal
+          person={editingResultPerson}
+          onSave={(fields) => onResultPersonSave(editingResultPerson.id, fields)}
+          onClose={() => setEditingResultPersonId(null)}
+        />
+      ) : null}
 
       <MaxWidthContainer className="border-t border-border/60 py-12 lg:py-16">
         <Prose>
@@ -390,47 +419,74 @@ function WealthPlanningToolPage() {
   )
 }
 
-/** "Joint" plus one pill per person — only shown once there's someone besides
- *  "You" to switch between. Joint is the whole household, combined and
- *  look-only; each person's own pill is their own editable forecast. */
-function PersonFilterPills({
+/**
+ * Sticks below the site header once you scroll into the results (top-16,
+ * z-40 — under the header's own z-50). Two jobs: the Joint/person filter
+ * chips (only shown once there's someone besides "You" to switch between —
+ * Joint is the whole household, combined and look-only; each person's own
+ * chip is their own editable forecast), and an "Edit inputs" shortcut for
+ * whoever's currently selected, so a tweak doesn't mean scrolling all the
+ * way back up to the form. Hidden on Joint — there's no single person's
+ * inputs to open from a combined view.
+ */
+function StickyResultsBar({
   people,
   selectedId,
   onSelect,
+  onEditPerson,
 }: {
   people: Person[]
   selectedId: string
   onSelect: (id: string) => void
+  onEditPerson: (id: string) => void
 }) {
+  const selectedPerson = people.find((p) => p.id === selectedId)
+
   return (
-    <div className="mb-6 flex flex-wrap gap-1.5">
-      <button
-        type="button"
-        onClick={() => onSelect('joint')}
-        className={cn(
-          'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
-          selectedId === 'joint'
-            ? 'bg-foreground text-primary-foreground'
-            : 'bg-muted text-muted-foreground hover:text-foreground',
-        )}
-      >
-        Joint
-      </button>
-      {people.map((p) => (
+    <div className="sticky top-16 z-40 mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-background/95 py-3 backdrop-blur">
+      {people.length > 1 ? (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => onSelect('joint')}
+            className={cn(
+              'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
+              selectedId === 'joint'
+                ? 'bg-foreground text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Joint
+          </button>
+          {people.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onSelect(p.id)}
+              className={cn(
+                'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
+                selectedId === p.id
+                  ? 'bg-foreground text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div />
+      )}
+      {selectedPerson ? (
         <button
-          key={p.id}
           type="button"
-          onClick={() => onSelect(p.id)}
-          className={cn(
-            'rounded-full px-4 py-2 text-[13px] font-medium transition-colors',
-            selectedId === p.id
-              ? 'bg-foreground text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:text-foreground',
-          )}
+          onClick={() => onEditPerson(selectedPerson.id)}
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/70"
         >
-          {p.name}
+          <Pencil size={13} strokeWidth={2.25} />
+          Edit {selectedPerson.name}'s inputs
         </button>
-      ))}
+      ) : null}
     </div>
   )
 }

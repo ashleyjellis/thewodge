@@ -1,11 +1,20 @@
 /**
- * The wealth planning tool's data-capture form. Two columns once there's room:
- * a list of everyone in the plan on the left ("You" first, always present),
- * whoever is selected editable on the right. Selecting a person collapses
- * whoever was open back to a summary card — the page stays out of the way of
- * the results once someone's numbers are in. One person at a time, one field
- * set for everyone (age, salary, pension, both ISAs, cash savings, bonus) —
- * see PersonFieldsPanel. Stacks to a single column below the lg breakpoint.
+ * The wealth planning tool's data-capture form: a list of everyone in the
+ * plan ("You" first, always present), whoever is selected editable directly
+ * below it. Selecting a person collapses whoever was open back to a summary
+ * card — the page stays out of the way of the results once someone's numbers
+ * are in. One person at a time, one field set for everyone (age, salary,
+ * pension, both ISAs, cash savings, bonus) — see PersonFieldsPanel.
+ *
+ * Always a single stacked column here, deliberately — this form shares the
+ * hero row with the page's intro copy (see the route), and MaxWidthContainer
+ * caps the page at 1180px, so its own share of that split has a hard ceiling
+ * of roughly 500px no matter how wide the viewport gets. There's never
+ * enough room for a second internal column, so it doesn't try. The field
+ * grids inside PersonFieldsPanel/Section do still respond to their own
+ * available width (container queries — @container/@sm/@lg — not viewport
+ * ones), since that genuinely varies: a single-column stack here vs. the
+ * quick-edit modal's own fixed width.
  *
  * Every save is explicit, not live-as-you-type, and nothing is saved or sent
  * — matches how the rest of the site's calculators work.
@@ -59,8 +68,8 @@ export function WealthPlanForm({
   const isPrimary = activePerson?.id === you.id
 
   return (
-    <div className={cn('rounded-3xl bg-card p-5 shadow-soft sm:p-6', className)}>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr] lg:items-start">
+    <div className={cn('@container rounded-3xl bg-card p-5 shadow-soft sm:p-6', className)}>
+      <div className="space-y-6">
         <div className="space-y-2.5">
           {people.map((p) => (
             <PersonRow
@@ -217,7 +226,7 @@ function AssumptionsSection({
         }}
         className="mt-3"
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
           <Field
             label="Investment growth rate"
             hint="pension & ISA stocks and shares, per year"
@@ -270,8 +279,8 @@ export function Section({
       <div
         className={cn(
           'mt-3 grid grid-cols-1 gap-3',
-          cols >= 2 && 'sm:grid-cols-2',
-          cols === 3 && 'lg:grid-cols-3',
+          cols >= 2 && '@sm:grid-cols-2',
+          cols === 3 && '@lg:grid-cols-3',
         )}
       >
         {children}

@@ -129,10 +129,10 @@ export function PersonFieldsPanel({
         if (!canSave) return
         onSave(toFields(f, fallbackName))
       }}
-      className="rounded-2xl border border-border/60 p-5 sm:p-6"
+      className="@container rounded-2xl border border-border/60 p-5 sm:p-6"
     >
       <div className="space-y-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
           <Field label="Name" value={f.name} onChange={set('name')} placeholder={fallbackName} />
           <Field
             label="Age"
