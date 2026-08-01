@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Pencil } from 'lucide-react'
+import { Compass, LineChart, Pencil, ShieldCheck, type LucideIcon } from 'lucide-react'
 import { CASH_RATE, INVESTED_RATE, SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
 import { cn } from '@/lib/cn'
@@ -40,6 +40,24 @@ const EXAMPLE: WealthPlanSearch = {
   bonus: 2_000,
   bonusTarget: 'isaStocks',
 }
+
+const USPS: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: Compass,
+    title: 'Fully Independent',
+    body: 'Built by you, for you and your financial needs.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Your Data Secure',
+    body: 'Our top priority is keeping your data safe with fully encrypted storage.',
+  },
+  {
+    icon: LineChart,
+    title: 'Your Free Plan',
+    body: 'See your holistic household financial plan and get free insights.',
+  },
+]
 
 const FAQ: { question: string; answer: string }[] = [
   {
@@ -325,6 +343,22 @@ function WealthPlanningToolPage() {
                   planning tool, not advice: the numbers, and the confidence, are
                   yours.
                 </p>
+
+                <div className="mt-8 space-y-4">
+                  {USPS.map((usp) => (
+                    <div key={usp.title} className="flex items-start gap-3.5">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-primary-foreground">
+                        <usp.icon size={18} strokeWidth={2.25} />
+                      </span>
+                      <div>
+                        <p className="text-[14px] font-semibold text-foreground">{usp.title}</p>
+                        <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+                          {usp.body}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div>
