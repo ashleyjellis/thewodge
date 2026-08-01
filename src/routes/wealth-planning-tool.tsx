@@ -303,44 +303,52 @@ function WealthPlanningToolPage() {
 
   return (
     <>
-      <MaxWidthContainer className="pb-12 pt-16 lg:pb-16 lg:pt-20">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-14">
-          <div className="max-w-xl">
-            <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Pension · ISAs · cash, planned together
-            </p>
-            <h1 className="mt-3 text-[36px] font-semibold leading-[1.1] tracking-tight">
-              Plan your wealth: pension, ISAs and cash, forecast together
-            </h1>
-            <p className="mt-5 text-[17px] leading-relaxed text-muted-foreground">
-              Salary, pension, an ISA split by cash and stocks &amp; shares, plain
-              cash savings, even an expected bonus — enter what you actually hold
-              and add, and see exactly where it leads, year by year.
-            </p>
-          </div>
-
-          <div>
-            {!hasAnyValue ? (
-              <div className="mb-6 rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
-                This is a worked example so you can see the plan in action —
-                change any number below and it becomes yours.
+      {/* Framed hero: a thin margin of the page's own background colour
+          around a rounded, textured card — the nav sits right above it, so
+          reducing this to a slim frame (rather than the old bare pt-16/20
+          gap) is what makes the hero read as "close to the nav." */}
+      <div className="bg-background px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4 lg:px-5 lg:pb-5 lg:pt-5">
+        <div className="relative overflow-hidden rounded-[1.75rem] bg-[url('/wealth-plan-hero-texture.webp')] bg-cover bg-center sm:rounded-[2.25rem]">
+          <MaxWidthContainer className="pb-12 pt-10 lg:pb-16 lg:pt-14">
+            <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-14">
+              <div className="max-w-xl">
+                <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  Pension · ISAs · cash, planned together
+                </p>
+                <h1 className="mt-3 text-[36px] font-semibold leading-[1.1] tracking-tight">
+                  Plan Your Wealth: Pension, ISAs and Cash, Forecast Together
+                </h1>
+                <p className="mt-5 text-[17px] leading-relaxed text-muted-foreground">
+                  Salary, pension, an ISA split by cash and stocks &amp; shares, plain
+                  cash savings, even an expected bonus — enter what you actually hold
+                  and add, and see exactly where it leads, year by year.
+                </p>
               </div>
-            ) : null}
-            <WealthPlanForm
-              people={people}
-              activePersonId={validFormPersonId}
-              onSelectPerson={setFormPersonId}
-              onSavePerson={onFormSavePerson}
-              onAddPerson={onFormAddPerson}
-              onRemovePerson={onFormRemovePerson}
-              ready={ready}
-              investedRatePct={effective.investedRatePct}
-              cashRatePct={effective.cashRatePct}
-              onSaveAssumptions={onSaveAssumptions}
-            />
-          </div>
+
+              <div>
+                {!hasAnyValue ? (
+                  <div className="mb-6 rounded-2xl bg-card/90 px-5 py-3.5 text-[13px] text-muted-foreground shadow-soft backdrop-blur-sm">
+                    This is a worked example so you can see the plan in action —
+                    change any number below and it becomes yours.
+                  </div>
+                ) : null}
+                <WealthPlanForm
+                  people={people}
+                  activePersonId={validFormPersonId}
+                  onSelectPerson={setFormPersonId}
+                  onSavePerson={onFormSavePerson}
+                  onAddPerson={onFormAddPerson}
+                  onRemovePerson={onFormRemovePerson}
+                  ready={ready}
+                  investedRatePct={effective.investedRatePct}
+                  cashRatePct={effective.cashRatePct}
+                  onSaveAssumptions={onSaveAssumptions}
+                />
+              </div>
+            </div>
+          </MaxWidthContainer>
         </div>
-      </MaxWidthContainer>
+      </div>
 
       <MaxWidthContainer className="pb-12 lg:pb-16">
         <div id="plan-results" className="scroll-mt-20">

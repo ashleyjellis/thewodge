@@ -110,7 +110,7 @@ export function WealthPlanForm({
               onCancel={() => onSelectPerson(null)}
             />
           ) : (
-            <div className="flex h-full min-h-[160px] items-center justify-center rounded-2xl border border-dashed border-border px-6 text-center text-[13px] text-muted-foreground">
+            <div className="rounded-2xl border border-dashed border-border px-5 py-4 text-[13px] text-muted-foreground">
               Select someone on the left to see or edit their numbers.
             </div>
           )}
@@ -142,22 +142,33 @@ function PersonRow({
     <button
       type="button"
       onClick={onClick}
+      aria-expanded={active}
       className={cn(
-        'block w-full rounded-2xl px-4 py-3.5 text-left transition-colors',
+        'flex w-full items-start justify-between gap-3 rounded-2xl px-4 py-3.5 text-left transition-colors',
         active ? 'bg-foreground' : 'bg-muted hover:bg-muted/70',
       )}
     >
-      <p className={cn('text-[14px] font-semibold', active ? 'text-primary-foreground' : 'text-foreground')}>
-        {person.name}
-      </p>
-      <p className={cn('mt-0.5 text-[12.5px]', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-        Age {person.age} · retiring at {person.targetAge}
-      </p>
-      {details.length > 0 ? (
-        <p className={cn('mt-1.5 text-[12px]', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-          {details.join(' · ')}
+      <div className="min-w-0">
+        <p className={cn('text-[14px] font-semibold', active ? 'text-primary-foreground' : 'text-foreground')}>
+          {person.name}
         </p>
-      ) : null}
+        <p className={cn('mt-0.5 text-[12.5px]', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+          Age {person.age} · retiring at {person.targetAge}
+        </p>
+        {details.length > 0 ? (
+          <p className={cn('mt-1.5 text-[12px]', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+            {details.join(' · ')}
+          </p>
+        ) : null}
+      </div>
+      <ChevronDown
+        size={16}
+        strokeWidth={2.25}
+        className={cn(
+          'mt-0.5 shrink-0 transition-transform',
+          active ? 'rotate-180 text-primary-foreground' : 'text-muted-foreground',
+        )}
+      />
     </button>
   )
 }
