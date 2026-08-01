@@ -1,383 +1,169 @@
 /**
- * The wealth planning tool's data-capture form — salary and age, pension as a
- * percentage of salary, ISA cash and ISA stocks & shares as separate monthly
- * contributions, cash savings, an expected annual bonus, and a starting balance for
- * every pot. Same visual language as the free calculator's own form (bg-muted
- * rounded-2xl fields) — grouped into sections because this one asks for a lot more.
+ * The wealth planning tool's data-capture form. Two columns once there's room:
+ * a list of everyone in the plan on the left ("You" first, always present),
+ * whoever is selected editable on the right. Selecting a person collapses
+ * whoever was open back to a summary card — the page stays out of the way of
+ * the results once someone's numbers are in. One person at a time, one field
+ * set for everyone (age, salary, pension, both ISAs, cash savings, bonus) —
+ * see PersonFieldsPanel. Stacks to a single column below the lg breakpoint.
  *
- * Stateless: on submit it hands values up so the caller writes them to the URL,
- * same as the free calculator. Explicit submit, not live-as-you-type — matches how
- * the rest of the site's calculators work.
+ * Every save is explicit, not live-as-you-type, and nothing is saved or sent
+ * — matches how the rest of the site's calculators work.
  */
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { Person } from '@/lib/household'
-import { POT_KEYS, POT_LABELS, type PotKey } from '@/lib/wealthPlan'
-import { MAX_PEOPLE, rateToPct, type WealthPlanSearch } from '@/lib/wealthPlanSearch'
-import { CASH_RATE, INVESTED_RATE, TARGET_AGE } from '@/config'
+import { MAX_PEOPLE } from '@/lib/wealthPlanSearch'
+import { rateToPct } from '@/lib/wealthPlanSearch'
+import { CASH_RATE, INVESTED_RATE } from '@/config'
 import { money, percent } from '@/lib/format'
 import { cn } from '@/lib/cn'
+import { PersonFieldsPanel } from './PersonFieldsPanel'
 
 const DEFAULT_INVESTED_PCT = rateToPct(INVESTED_RATE)
 const DEFAULT_CASH_PCT = rateToPct(CASH_RATE)
 
-type FieldState = {
-  age: string
-  targetAge: string
-  salary: string
-  pensionPct: string
-  pension: string
-  isaStocks: string
-  isaStocksMonthly: string
-  isaCash: string
-  isaCashMonthly: string
-  cashSavings: string
-  cashSavingsMonthly: string
-  bonus: string
-  bonusTarget: PotKey
-  investedRatePct: string
-  cashRatePct: string
-}
-
-function toFieldState(v: WealthPlanSearch): FieldState {
-  const s = (n: number | undefined) => (n === undefined ? '' : String(n))
-  return {
-    age: s(v.age),
-    targetAge: s(v.targetAge ?? TARGET_AGE),
-    salary: s(v.salary),
-    pensionPct: s(v.pensionPct),
-    pension: s(v.pension),
-    isaStocks: s(v.isaStocks),
-    isaStocksMonthly: s(v.isaStocksMonthly),
-    isaCash: s(v.isaCash),
-    isaCashMonthly: s(v.isaCashMonthly),
-    cashSavings: s(v.cashSavings),
-    cashSavingsMonthly: s(v.cashSavingsMonthly),
-    bonus: s(v.bonus),
-    bonusTarget: v.bonusTarget ?? 'isaStocks',
-    investedRatePct: s(v.investedRatePct ?? DEFAULT_INVESTED_PCT),
-    cashRatePct: s(v.cashRatePct ?? DEFAULT_CASH_PCT),
-  }
-}
-
-function toSearchValues(f: FieldState): WealthPlanSearch {
-  const n = (x: string) => {
-    const v = Number(x)
-    return x.trim() !== '' && Number.isFinite(v) && v >= 0 ? v : undefined
-  }
-  return {
-    age: n(f.age),
-    targetAge: n(f.targetAge),
-    salary: n(f.salary),
-    pensionPct: n(f.pensionPct),
-    pension: n(f.pension),
-    isaStocks: n(f.isaStocks),
-    isaStocksMonthly: n(f.isaStocksMonthly),
-    isaCash: n(f.isaCash),
-    isaCashMonthly: n(f.isaCashMonthly),
-    cashSavings: n(f.cashSavings),
-    cashSavingsMonthly: n(f.cashSavingsMonthly),
-    bonus: n(f.bonus),
-    bonusTarget: f.bonusTarget,
-    investedRatePct: n(f.investedRatePct),
-    cashRatePct: n(f.cashRatePct),
-  }
-}
-
 export function WealthPlanForm({
-  initial,
-  onSubmit,
-  submitLabel = 'See your plan',
-  className,
-  additionalPeople,
+  people,
+  activePersonId,
+  onSelectPerson,
+  onSavePerson,
   onAddPerson,
-  onEditPerson,
+  onRemovePerson,
+  ready,
+  investedRatePct,
+  cashRatePct,
+  onSaveAssumptions,
+  className,
 }: {
-  initial: WealthPlanSearch
-  onSubmit: (values: WealthPlanSearch) => void
-  submitLabel?: string
+  /** "You" first, always present */
+  people: Person[]
+  /** whose fields are open on the right; 'new' = the add-a-person flow; null = nobody, just the list */
+  activePersonId: string | 'new' | null
+  onSelectPerson: (id: string | 'new' | null) => void
+  onSavePerson: (id: string, fields: Omit<Person, 'id'>) => void
+  onAddPerson: (fields: Omit<Person, 'id'>) => void
+  onRemovePerson: (id: string) => void
+  /** whether there's enough of "You" to show results — changes the primary save label */
+  ready: boolean
+  investedRatePct?: number
+  cashRatePct?: number
+  onSaveAssumptions: (investedRatePct: number | undefined, cashRatePct: number | undefined) => void
   className?: string
-  /** everyone but "You" — person 1 is this form itself */
-  additionalPeople: Person[]
-  onAddPerson: () => void
-  onEditPerson: (id: string) => void
 }) {
-  const [f, setF] = useState<FieldState>(() => toFieldState(initial))
-  const set = (k: keyof Omit<FieldState, 'bonusTarget'>) => (v: string) =>
-    setF((p) => ({ ...p, [k]: v }))
+  const you = people[0]!
+  const activePerson =
+    activePersonId && activePersonId !== 'new' ? people.find((p) => p.id === activePersonId) : undefined
+  const isAdding = activePersonId === 'new'
+  const isPrimary = activePerson?.id === you.id
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit(toSearchValues(f))
-      }}
-      className={cn('rounded-3xl bg-card p-5 shadow-soft sm:p-6', className)}
-    >
-      <div className="space-y-5">
-        <Section title="About you" cols={3}>
-          <Field
-            label="Your age"
-            value={f.age}
-            onChange={set('age')}
-            placeholder="34"
-            inputMode="numeric"
-          />
-          <Field
-            label="Plan to age"
-            hint="when you're forecasting to"
-            value={f.targetAge}
-            onChange={set('targetAge')}
-            placeholder={String(TARGET_AGE)}
-            inputMode="numeric"
-          />
-          <Field
-            label="Annual salary"
-            hint="used only to work out your pension contribution"
-            prefix="£"
-            value={f.salary}
-            onChange={set('salary')}
-            placeholder="55,000"
-            className="sm:col-span-2 lg:col-span-1"
-          />
-        </Section>
-
-        <Section title="Pension">
-          <Field
-            label="Current pension value"
-            prefix="£"
-            value={f.pension}
-            onChange={set('pension')}
-            placeholder="60,000"
-          />
-          <Field
-            label="Contribution"
-            hint="% of salary, monthly"
-            suffix="%"
-            value={f.pensionPct}
-            onChange={set('pensionPct')}
-            placeholder="5"
-          />
-        </Section>
-
-        <Section title="ISA — stocks & shares">
-          <Field
-            label="Current value"
-            prefix="£"
-            value={f.isaStocks}
-            onChange={set('isaStocks')}
-            placeholder="15,000"
-          />
-          <Field
-            label="Monthly contribution"
-            prefix="£"
-            value={f.isaStocksMonthly}
-            onChange={set('isaStocksMonthly')}
-            placeholder="250"
-          />
-        </Section>
-
-        <Section title="ISA — cash">
-          <Field
-            label="Current value"
-            prefix="£"
-            value={f.isaCash}
-            onChange={set('isaCash')}
-            placeholder="5,000"
-          />
-          <Field
-            label="Monthly contribution"
-            prefix="£"
-            value={f.isaCashMonthly}
-            onChange={set('isaCashMonthly')}
-            placeholder="100"
-          />
-        </Section>
-
-        <Section title="Cash savings" hint="outside an ISA">
-          <Field
-            label="Current value"
-            prefix="£"
-            value={f.cashSavings}
-            onChange={set('cashSavings')}
-            placeholder="8,000"
-          />
-          <Field
-            label="Monthly contribution"
-            prefix="£"
-            value={f.cashSavingsMonthly}
-            onChange={set('cashSavingsMonthly')}
-            placeholder="150"
-          />
-        </Section>
-
-        <Section title="Bonus" hint="optional">
-          <Field
-            label="Expected annual bonus"
-            prefix="£"
-            value={f.bonus}
-            onChange={set('bonus')}
-            placeholder="2,000"
-          />
-          <BonusTargetPicker
-            value={f.bonusTarget}
-            onChange={(bonusTarget) => setF((p) => ({ ...p, bonusTarget }))}
-          />
-        </Section>
-
-        <Section title="People" hint="optional — plan for more than yourself" cols={1}>
-          {additionalPeople.map((p) => (
-            <PersonSummaryCard key={p.id} person={p} onEdit={() => onEditPerson(p.id)} />
+    <div className={cn('rounded-3xl bg-card p-5 shadow-soft sm:p-6', className)}>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr] lg:items-start">
+        <div className="space-y-2.5">
+          {people.map((p) => (
+            <PersonRow
+              key={p.id}
+              person={p}
+              active={p.id === activePersonId}
+              onClick={() => onSelectPerson(p.id === activePersonId ? null : p.id)}
+            />
           ))}
-          {additionalPeople.length < MAX_PEOPLE - 1 ? (
-            <AddPersonTile onClick={onAddPerson} />
+          {people.length < MAX_PEOPLE ? (
+            <AddPersonTile
+              active={isAdding}
+              onClick={() => onSelectPerson(isAdding ? null : 'new')}
+            />
           ) : (
-            <p className="text-[12px] text-muted-foreground">
+            <p className="px-1 text-[12px] text-muted-foreground">
               Up to {MAX_PEOPLE} people at once.
             </p>
           )}
-        </Section>
+        </div>
 
-        <Section
-          title="Assumptions"
-          hint={
-            <>
-              {f.investedRatePct || DEFAULT_INVESTED_PCT}% investments ·{' '}
-              {f.cashRatePct || DEFAULT_CASH_PCT}% cash — yours to change
-            </>
-          }
-          collapsible
-        >
-          <Field
-            label="Investment growth rate"
-            hint="pension & ISA stocks and shares, per year"
-            suffix="%"
-            value={f.investedRatePct}
-            onChange={set('investedRatePct')}
-            placeholder={String(DEFAULT_INVESTED_PCT)}
-          />
-          <Field
-            label="Cash growth rate"
-            hint="ISA cash & cash savings, per year"
-            suffix="%"
-            value={f.cashRatePct}
-            onChange={set('cashRatePct')}
-            placeholder={String(DEFAULT_CASH_PCT)}
-          />
-        </Section>
+        <div>
+          {activePerson || isAdding ? (
+            <PersonFieldsPanel
+              key={activePersonId}
+              person={activePerson}
+              fallbackName={isPrimary ? 'You' : isAdding ? `Person ${people.length + 1}` : 'Person'}
+              saveLabel={
+                isPrimary ? (ready ? 'Save changes' : 'See your plan') : activePerson ? 'Save changes' : 'Add to plan'
+              }
+              canRemove={!!activePerson && !isPrimary}
+              removeLabel={`Remove ${activePerson?.name ?? 'them'} from this plan`}
+              onSave={(fields) => {
+                if (activePerson) onSavePerson(activePerson.id, fields)
+                else onAddPerson(fields)
+              }}
+              onRemove={() => activePerson && onRemovePerson(activePerson.id)}
+              onCancel={() => onSelectPerson(null)}
+            />
+          ) : (
+            <div className="flex h-full min-h-[160px] items-center justify-center rounded-2xl border border-dashed border-border px-6 text-center text-[13px] text-muted-foreground">
+              Select someone on the left to see or edit their numbers.
+            </div>
+          )}
+        </div>
       </div>
 
-      <button
-        type="submit"
-        className="mt-5 w-full rounded-full bg-foreground px-6 py-3.5 text-center text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-95"
-      >
-        {submitLabel}
-      </button>
-      <p className="mt-2.5 text-center text-[11px] text-muted-foreground">
-        Nothing is saved or sent. Your numbers stay in the page.
-      </p>
-    </form>
+      <AssumptionsSection
+        investedRatePct={investedRatePct}
+        cashRatePct={cashRatePct}
+        onSave={onSaveAssumptions}
+      />
+    </div>
   )
 }
 
-/** Shared with PersonModal, which builds the same section-grouped layout for
- *  an additional person's own numbers. */
-export function Section({
-  title,
-  hint,
-  cols = 2,
-  collapsible = false,
-  children,
+function PersonRow({
+  person,
+  active,
+  onClick,
 }: {
-  title: string
-  hint?: ReactNode
-  /** 1 = stacked full-width (e.g. a list of cards), not a field grid */
-  cols?: 1 | 2 | 3
-  /** renders as a closed-by-default <details> — for optional, advanced fields */
-  collapsible?: boolean
-  children: ReactNode
+  person: Person
+  active: boolean
+  onClick: () => void
 }) {
-  const heading = (
-    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-      {title}
-      {hint ? (
-        <span className="ml-1.5 normal-case font-normal text-muted-foreground/70">
-          {hint}
-        </span>
-      ) : null}
-    </p>
-  )
-  const grid = (
-    <div
-      className={cn(
-        'mt-3 grid grid-cols-1 gap-3',
-        cols >= 2 && 'sm:grid-cols-2',
-        cols === 3 && 'lg:grid-cols-3',
-      )}
-    >
-      {children}
-    </div>
-  )
-
-  if (collapsible) {
-    return (
-      <details className="border-t border-border/60 pt-5">
-        <summary className="flex items-center justify-between gap-3">
-          {heading}
-          <ChevronDown
-            size={16}
-            strokeWidth={2.25}
-            className="drawer-chevron shrink-0 text-muted-foreground"
-          />
-        </summary>
-        {grid}
-      </details>
-    )
-  }
-
-  return (
-    <div className="border-t border-border/60 pt-5 first:border-t-0 first:pt-0">
-      {heading}
-      {grid}
-    </div>
-  )
-}
-
-function PersonSummaryCard({ person, onEdit }: { person: Person; onEdit: () => void }) {
   const details: string[] = []
   if (person.salary > 0) details.push(`Salary ${money(person.salary)}`)
   if (person.pensionPct > 0) details.push(`${percent(person.pensionPct, 0)} pension`)
   return (
-    <div className="rounded-2xl bg-muted px-4 py-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[14px] font-semibold text-foreground">{person.name}</p>
-          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-            Age {person.age} · retiring at {person.targetAge}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="shrink-0 text-[12.5px] font-medium text-foreground underline underline-offset-2 hover:opacity-70"
-        >
-          Edit
-        </button>
-      </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'block w-full rounded-2xl px-4 py-3.5 text-left transition-colors',
+        active ? 'bg-foreground' : 'bg-muted hover:bg-muted/70',
+      )}
+    >
+      <p className={cn('text-[14px] font-semibold', active ? 'text-primary-foreground' : 'text-foreground')}>
+        {person.name}
+      </p>
+      <p className={cn('mt-0.5 text-[12.5px]', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+        Age {person.age} · retiring at {person.targetAge}
+      </p>
       {details.length > 0 ? (
-        <p className="mt-2 text-[12.5px] text-muted-foreground">{details.join(' · ')}</p>
+        <p className={cn('mt-1.5 text-[12px]', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+          {details.join(' · ')}
+        </p>
       ) : null}
-    </div>
+    </button>
   )
 }
 
-function AddPersonTile({ onClick }: { onClick: () => void }) {
+function AddPersonTile({ active, onClick }: { active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-border px-4 py-3.5 text-left text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+      className={cn(
+        'flex w-full items-center gap-3 rounded-2xl border border-dashed px-4 py-3.5 text-left transition-colors',
+        active
+          ? 'border-foreground/40 text-foreground'
+          : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
+      )}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-current text-[15px] leading-none">
         +
@@ -392,40 +178,110 @@ function AddPersonTile({ onClick }: { onClick: () => void }) {
   )
 }
 
-function BonusTargetPicker({
-  value,
-  onChange,
+function AssumptionsSection({
+  investedRatePct,
+  cashRatePct,
+  onSave,
 }: {
-  value: PotKey
-  onChange: (v: PotKey) => void
+  investedRatePct?: number
+  cashRatePct?: number
+  onSave: (investedRatePct: number | undefined, cashRatePct: number | undefined) => void
+}) {
+  const [invested, setInvested] = useState(() => String(investedRatePct ?? ''))
+  const [cash, setCash] = useState(() => String(cashRatePct ?? ''))
+  const n = (x: string) => {
+    const v = Number(x)
+    return x.trim() !== '' && Number.isFinite(v) && v >= 0 ? v : undefined
+  }
+
+  return (
+    <details className="mt-6 border-t border-border/60 pt-5">
+      <summary className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Assumptions
+          <span className="ml-1.5 normal-case font-normal text-muted-foreground/70">
+            {invested || DEFAULT_INVESTED_PCT}% investments · {cash || DEFAULT_CASH_PCT}% cash — yours to
+            change
+          </span>
+        </p>
+        <ChevronDown
+          size={16}
+          strokeWidth={2.25}
+          className="drawer-chevron shrink-0 text-muted-foreground"
+        />
+      </summary>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          onSave(n(invested), n(cash))
+        }}
+        className="mt-3"
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field
+            label="Investment growth rate"
+            hint="pension & ISA stocks and shares, per year"
+            suffix="%"
+            value={invested}
+            onChange={setInvested}
+            placeholder={String(DEFAULT_INVESTED_PCT)}
+          />
+          <Field
+            label="Cash growth rate"
+            hint="ISA cash & cash savings, per year"
+            suffix="%"
+            value={cash}
+            onChange={setCash}
+            placeholder={String(DEFAULT_CASH_PCT)}
+          />
+        </div>
+        <button
+          type="submit"
+          className="mt-3 rounded-full bg-foreground px-5 py-2.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-95"
+        >
+          Save assumptions
+        </button>
+      </form>
+    </details>
+  )
+}
+
+/** Shared with PersonFieldsPanel, which builds the same section-grouped
+ *  layout for a person's own numbers. */
+export function Section({
+  title,
+  hint,
+  cols = 2,
+  children,
+}: {
+  title: string
+  hint?: ReactNode
+  cols?: 1 | 2 | 3
+  children: ReactNode
 }) {
   return (
-    <div className="flex h-full flex-col">
-      <span className="text-[12.5px] font-medium leading-snug text-foreground">
-        Add the bonus to
-      </span>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {POT_KEYS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onChange(key)}
-            className={cn(
-              'rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-colors',
-              value === key
-                ? 'bg-foreground text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {POT_LABELS[key]}
-          </button>
-        ))}
+    <div className="border-t border-border/60 pt-5 first:border-t-0 first:pt-0">
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+        {hint ? (
+          <span className="ml-1.5 normal-case font-normal text-muted-foreground/70">{hint}</span>
+        ) : null}
+      </p>
+      <div
+        className={cn(
+          'mt-3 grid grid-cols-1 gap-3',
+          cols >= 2 && 'sm:grid-cols-2',
+          cols === 3 && 'lg:grid-cols-3',
+        )}
+      >
+        {children}
       </div>
     </div>
   )
 }
 
-/** Shared with ContributionModal, which asks for the same shape of numbers. */
+/** Shared with ContributionModal and PersonFieldsPanel, which ask for the
+ *  same shape of numbers. */
 export function Field({
   label,
   hint,

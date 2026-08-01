@@ -10,7 +10,6 @@ import {
   peopleToSearch,
   searchToPeople,
   toWealthPlanAssumptions,
-  toWealthPlanInput,
   validateWealthPlanSearch,
   type WealthPlanSearch,
 } from '@/lib/wealthPlanSearch'
@@ -20,7 +19,6 @@ import { PageHeader, Prose } from '@/components/site/Page'
 import { NavLink } from '@/components/NavLink'
 import { WealthPlanForm } from '@/components/wealthPlan/WealthPlanForm'
 import { WealthPlanResults } from '@/components/wealthPlan/WealthPlanResults'
-import { PersonModal } from '@/components/wealthPlan/PersonModal'
 
 /** Shown on a cold landing (no search params at all) so the page — and crawlers —
  *  see a fully worked example rather than an empty form. Illustrative only; the
@@ -153,13 +151,17 @@ function WealthPlanningToolPage() {
   const isJointView = validSelectedId === 'joint' && people.length > 1
   const activePersonId = isJointView ? null : validSelectedId === 'joint' ? people[0]!.id : validSelectedId
 
-  // Which person's card opened the modal — 'new' for the "Add a person" tile,
-  // an id for an existing card's Edit link, null when the modal is closed.
-  const [editingPersonId, setEditingPersonId] = useState<string | 'new' | null>(null)
-  const editingPerson =
-    editingPersonId && editingPersonId !== 'new'
-      ? people.find((p) => p.id === editingPersonId)
-      : undefined
+  // Which person's fields are open in the form's own right-hand panel —
+  // 'new' for the "Add a person" tile, an id for an existing person, null for
+  // nobody (just the collapsed list). A completely separate concept from
+  // selectedPersonId above: that one picks whose RESULTS you're viewing,
+  // this one picks whose DATA you're editing — they're allowed to differ.
+  // Starts open on "You" so a first-time visitor sees the form immediately.
+  const [formPersonId, setFormPersonId] = useState<string | 'new' | null>(() => people[0]!.id)
+  const validFormPersonId =
+    formPersonId === 'new' || formPersonId === null || people.some((p) => p.id === formPersonId)
+      ? formPersonId
+      : people[0]!.id
 
   const peopleWithOverrides = people.map((p) => ({
     ...p,
@@ -179,56 +181,54 @@ function WealthPlanningToolPage() {
     ? (contributionOverridesByPerson[activePersonId] ?? [])
     : []
 
-  const navigateToPeople = (newPeople: Person[]) => {
+  // resetScroll: false on every navigate below — the router defaults to
+  // jumping scroll to the top of the page, which would fight the manual
+  // scroll-to-results some of these do.
+  const navigateToPeople = (
+    newPeople: Person[],
+    options?: { investedRatePct?: number; cashRatePct?: number; scrollToResults?: boolean },
+  ) => {
     setRateOverridesByPerson({})
     setContributionOverridesByPerson({})
     setGeneration((g) => g + 1)
-    void navigate({
+    const result = navigate({
       to: '/wealth-planning-tool',
       search: {
         ...peopleToSearch(newPeople),
-        investedRatePct: effective.investedRatePct,
-        cashRatePct: effective.cashRatePct,
+        investedRatePct: options?.investedRatePct ?? effective.investedRatePct,
+        cashRatePct: options?.cashRatePct ?? effective.cashRatePct,
       },
       resetScroll: false,
     })
-  }
-
-  const onSubmit = (values: WealthPlanSearch) => {
-    const updatedYou: Person = { ...toWealthPlanInput(values), id: people[0]!.id, name: 'You' }
-    setRateOverridesByPerson({})
-    setContributionOverridesByPerson({})
-    setGeneration((g) => g + 1)
-    // resetScroll: false — the router defaults to jumping scroll to the top of
-    // the page on navigate, which would fight the manual scroll below.
-    void navigate({
-      to: '/wealth-planning-tool',
-      search: {
-        ...peopleToSearch([updatedYou, ...people.slice(1)]),
-        investedRatePct: values.investedRatePct,
-        cashRatePct: values.cashRatePct,
-      },
-      resetScroll: false,
-    }).then(() => {
-      document.getElementById('plan-results')?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
+    if (options?.scrollToResults) {
+      void result.then(() => {
+        document.getElementById('plan-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
-    })
-  }
-
-  const onPersonSave = (fields: Omit<Person, 'id'>) => {
-    if (editingPersonId && editingPersonId !== 'new') {
-      navigateToPeople(people.map((p) => (p.id === editingPersonId ? { ...fields, id: p.id } : p)))
     } else {
-      navigateToPeople([...people, { ...fields, id: `person-${people.length + 1}` }])
+      void result
     }
   }
 
-  const onPersonRemove = () => {
-    if (editingPersonId && editingPersonId !== 'new') {
-      navigateToPeople(people.filter((p) => p.id !== editingPersonId))
-    }
+  const onFormSavePerson = (id: string, fields: Omit<Person, 'id'>) => {
+    navigateToPeople(
+      people.map((p) => (p.id === id ? { ...fields, id: p.id } : p)),
+      { scrollToResults: id === people[0]!.id },
+    )
+    setFormPersonId(null)
+  }
+
+  const onFormAddPerson = (fields: Omit<Person, 'id'>) => {
+    navigateToPeople([...people, { ...fields, id: `person-${people.length + 1}` }])
+    setFormPersonId(null)
+  }
+
+  const onFormRemovePerson = (id: string) => {
+    navigateToPeople(people.filter((p) => p.id !== id))
+    setFormPersonId(null)
+  }
+
+  const onSaveAssumptions = (investedRatePct: number | undefined, cashRatePct: number | undefined) => {
+    navigateToPeople(people, { investedRatePct, cashRatePct })
   }
 
   const onOverrideChange = (
@@ -300,20 +300,24 @@ function WealthPlanningToolPage() {
       />
 
       <MaxWidthContainer className="py-12 lg:py-16">
-        <div className="max-w-2xl">
+        <div>
           {!hasAnyValue ? (
-            <div className="mb-6 rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
+            <div className="mb-6 max-w-2xl rounded-2xl bg-muted/60 px-5 py-3.5 text-[13px] text-muted-foreground">
               This is a worked example so you can see the plan in action — change
               any number below and it becomes yours.
             </div>
           ) : null}
           <WealthPlanForm
-            initial={effective}
-            onSubmit={onSubmit}
-            submitLabel={ready ? 'Update my plan' : 'See your plan'}
-            additionalPeople={people.slice(1)}
-            onAddPerson={() => setEditingPersonId('new')}
-            onEditPerson={(id) => setEditingPersonId(id)}
+            people={people}
+            activePersonId={validFormPersonId}
+            onSelectPerson={setFormPersonId}
+            onSavePerson={onFormSavePerson}
+            onAddPerson={onFormAddPerson}
+            onRemovePerson={onFormRemovePerson}
+            ready={ready}
+            investedRatePct={effective.investedRatePct}
+            cashRatePct={effective.cashRatePct}
+            onSaveAssumptions={onSaveAssumptions}
           />
         </div>
 
@@ -354,15 +358,6 @@ function WealthPlanningToolPage() {
           )}
         </div>
       </MaxWidthContainer>
-
-      {editingPersonId !== null ? (
-        <PersonModal
-          person={editingPerson}
-          onSave={onPersonSave}
-          onRemove={onPersonRemove}
-          onClose={() => setEditingPersonId(null)}
-        />
-      ) : null}
 
       <MaxWidthContainer className="border-t border-border/60 py-12 lg:py-16">
         <Prose>
