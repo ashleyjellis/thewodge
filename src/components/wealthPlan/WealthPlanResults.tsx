@@ -62,8 +62,27 @@ export function WealthPlanResults({
   const crossoverAge = result.crossoverYear !== null ? anchorAge + result.crossoverYear : null
   const totalBonus = people.reduce((s, p) => s + p.bonus, 0)
 
+  // Ties the outlook above to the table below: jumping to a year scrolls its
+  // row into view and briefly highlights it, so "the table shows exactly
+  // when" is something you can click, not just read. Cleared a couple of
+  // seconds later (rather than left highlighted forever) so clicking the
+  // same year twice in a row highlights it again instead of doing nothing.
+  const [highlightYear, setHighlightYear] = useState<number | null>(null)
+  const jumpToYear = (year: number) => {
+    setHighlightYear(year)
+    document.getElementById(`plan-year-${year}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    window.setTimeout(() => setHighlightYear((cur) => (cur === year ? null : cur)), 2400)
+  }
+
   return (
     <div className="space-y-6">
+      {/* section label — pairs with "Year by year" below, marking the two
+          halves of the plan: the outlook (this card + the pot/contribution
+          split) and the master year-by-year table */}
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        The outlook
+      </p>
+
       {/* whole-picture hero */}
       <div className="rounded-3xl bg-card p-7 shadow-soft sm:p-10">
         <p className="text-[13px] text-muted-foreground">
@@ -84,6 +103,15 @@ export function WealthPlanResults({
             ? `That’s ${years} ${years === 1 ? 'year' : 'years'} of your pension, ISAs and cash savings carried forward together, in today’s terms.`
             : 'That’s your pension, ISAs and cash savings today.'}
         </p>
+        {years > 0 ? (
+          <button
+            type="button"
+            onClick={() => jumpToYear(years)}
+            className="mt-4 text-[12.5px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            See age {result.targetAge} in the table below ↓
+          </button>
+        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -201,15 +229,22 @@ export function WealthPlanResults({
         </div>
       ) : null}
 
-      {/* the crossover moment — named here, shown in full in the table below */}
+      {/* the crossover moment — named here, jumps to its row in the table below */}
       {crossoverAge !== null ? (
         <div className="rounded-2xl bg-accent/40 px-5 py-4">
           <p className="max-w-xl text-[13px] leading-relaxed text-foreground/80">
             <span className="font-semibold text-foreground">Worth pausing on:</span>{' '}
             from around age {crossoverAge}, growth on what you already hold
             typically adds more in a year than everything you put in that year —
-            quietly, from then on. The table below shows exactly when.
+            quietly, from then on.
           </p>
+          <button
+            type="button"
+            onClick={() => jumpToYear(result.crossoverYear!)}
+            className="mt-2 text-[12.5px] font-medium text-foreground/70 underline underline-offset-2 hover:text-foreground"
+          >
+            See it in the table below ↓
+          </button>
         </div>
       ) : null}
 
@@ -217,6 +252,7 @@ export function WealthPlanResults({
       <WealthPlanYearlyTable
         yearly={result.yearly}
         crossoverYear={result.crossoverYear}
+        highlightYear={highlightYear}
         assumptions={result.assumptions}
         overrides={rateOverrides}
         onOverrideChange={onOverrideChange}

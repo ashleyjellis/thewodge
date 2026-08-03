@@ -87,6 +87,7 @@ function categoryPoint(p: WealthPlanYearPoint, category: TableCategory): PotYear
 export function WealthPlanYearlyTable({
   yearly,
   crossoverYear,
+  highlightYear,
   assumptions,
   overrides,
   onOverrideChange,
@@ -99,6 +100,9 @@ export function WealthPlanYearlyTable({
 }: {
   yearly: WealthPlanYearPoint[]
   crossoverYear: number | null
+  /** briefly emphasised row, set by a "see it in the table" link above —
+   *  see WealthPlanResults' jumpToYear */
+  highlightYear: number | null
   assumptions: Assumptions
   overrides: RateOverride[]
   onOverrideChange: (year: number, field: RateField, pct: number | undefined) => void
@@ -211,6 +215,7 @@ export function WealthPlanYearlyTable({
           <ExpandedTable
             yearly={yearly}
             crossoverYear={crossoverYear}
+            highlightYear={highlightYear}
             overrideByYear={overrideByYear}
             assumptions={assumptions}
             onOverrideChange={onOverrideChange}
@@ -223,6 +228,7 @@ export function WealthPlanYearlyTable({
           <CondensedTable
             yearly={yearly}
             crossoverYear={crossoverYear}
+            highlightYear={highlightYear}
             overrideByYear={overrideByYear}
             assumptions={assumptions}
             category={category}
@@ -261,6 +267,7 @@ export function WealthPlanYearlyTable({
 function CondensedTable({
   yearly,
   crossoverYear,
+  highlightYear,
   overrideByYear,
   assumptions,
   category,
@@ -273,6 +280,7 @@ function CondensedTable({
 }: {
   yearly: WealthPlanYearPoint[]
   crossoverYear: number | null
+  highlightYear: number | null
   overrideByYear: Map<number, RateOverride>
   assumptions: Assumptions
   category: TableCategory
@@ -316,7 +324,15 @@ function CondensedTable({
                 : false
 
           return (
-            <tr key={p.year} className={cn('border-t border-border', isCrossover && 'bg-accent/30')}>
+            <tr
+              key={p.year}
+              id={`plan-year-${p.year}`}
+              className={cn(
+                'border-t border-border transition-colors duration-700',
+                isCrossover && 'bg-accent/30',
+                p.year === highlightYear && 'bg-accent/60',
+              )}
+            >
               <td className="sticky left-0 z-[5] whitespace-nowrap border-r border-border bg-card py-2 pr-1.5 text-muted-foreground">
                 {p.age}
                 {isCrossover ? (
@@ -370,6 +386,7 @@ function CondensedTable({
 function ExpandedTable({
   yearly,
   crossoverYear,
+  highlightYear,
   overrideByYear,
   assumptions,
   onOverrideChange,
@@ -380,6 +397,7 @@ function ExpandedTable({
 }: {
   yearly: WealthPlanYearPoint[]
   crossoverYear: number | null
+  highlightYear: number | null
   overrideByYear: Map<number, RateOverride>
   assumptions: Assumptions
   onOverrideChange: (year: number, field: RateField, pct: number | undefined) => void
@@ -411,7 +429,15 @@ function ExpandedTable({
           const isCrossover = p.year === crossoverYear
           const override = overrideByYear.get(p.year)
           return (
-            <tr key={p.year} className={cn('border-t border-border', isCrossover && 'bg-accent/30')}>
+            <tr
+              key={p.year}
+              id={`plan-year-${p.year}`}
+              className={cn(
+                'border-t border-border transition-colors duration-700',
+                isCrossover && 'bg-accent/30',
+                p.year === highlightYear && 'bg-accent/60',
+              )}
+            >
               <td className="sticky left-0 z-[5] whitespace-nowrap border-r border-border bg-card py-2 pr-2.5 text-muted-foreground">
                 {p.age}
                 {isCrossover ? (
