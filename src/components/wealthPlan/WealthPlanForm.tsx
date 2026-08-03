@@ -44,6 +44,7 @@ export function WealthPlanForm({
   investedRatePct,
   cashRatePct,
   onSaveAssumptions,
+  onCreatePlan,
   className,
 }: {
   /** "You" first, always present */
@@ -59,6 +60,8 @@ export function WealthPlanForm({
   investedRatePct?: number
   cashRatePct?: number
   onSaveAssumptions: (investedRatePct: number | undefined, cashRatePct: number | undefined) => void
+  /** reveals + scrolls to the (otherwise hidden-until-asked-for) results section */
+  onCreatePlan: () => void
   className?: string
 }) {
   const you = people[0]!
@@ -126,9 +129,7 @@ export function WealthPlanForm({
 
       <button
         type="button"
-        onClick={() =>
-          document.getElementById('plan-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
+        onClick={onCreatePlan}
         className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 py-3.5 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-95"
       >
         Create your plan

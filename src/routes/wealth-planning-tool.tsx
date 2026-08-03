@@ -190,6 +190,13 @@ function WealthPlanningToolPage() {
   const [editingResultPersonId, setEditingResultPersonId] = useState<string | null>(null)
   const editingResultPerson = people.find((p) => p.id === editingResultPersonId)
 
+  // Results stay hidden on first load — even once there's enough to show —
+  // until the visitor explicitly asks to see them, either via "Create your
+  // plan" or by saving their own numbers for the first time (see
+  // navigateToPeople's scrollToResults). Never reset back to false: once
+  // shown, later edits just update the plan in place.
+  const [hasBuiltPlan, setHasBuiltPlan] = useState(false)
+
   const peopleWithOverrides = people.map((p) => ({
     ...p,
     rateOverrides: rateOverridesByPerson[p.id] ?? [],
@@ -218,6 +225,7 @@ function WealthPlanningToolPage() {
     setRateOverridesByPerson({})
     setContributionOverridesByPerson({})
     setGeneration((g) => g + 1)
+    if (options?.scrollToResults) setHasBuiltPlan(true)
     const result = navigate({
       to: '/wealth-planning-tool',
       search: {
@@ -234,6 +242,11 @@ function WealthPlanningToolPage() {
     } else {
       void result
     }
+  }
+
+  const onCreatePlan = () => {
+    setHasBuiltPlan(true)
+    document.getElementById('plan-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   const onFormSavePerson = (id: string, fields: Omit<Person, 'id'>) => {
@@ -381,6 +394,7 @@ function WealthPlanningToolPage() {
                   investedRatePct={effective.investedRatePct}
                   cashRatePct={effective.cashRatePct}
                   onSaveAssumptions={onSaveAssumptions}
+                  onCreatePlan={onCreatePlan}
                 />
               </div>
             </div>
@@ -390,8 +404,9 @@ function WealthPlanningToolPage() {
 
       <MaxWidthContainer className="pb-12 lg:pb-16">
         <div id="plan-results" className="scroll-mt-20">
-          {ready && result ? (
+          {ready && result && hasBuiltPlan ? (
             <>
+              <h2 className="mb-6 text-[20px] font-semibold tracking-tight">Your Wealth Plan</h2>
               <StickyResultsBar
                 people={people}
                 selectedId={validSelectedId}
@@ -415,11 +430,12 @@ function WealthPlanningToolPage() {
           ) : (
             <div className="max-w-xl border-t border-border/60 py-10">
               <h2 className="text-[20px] font-semibold tracking-tight">
-                Add your numbers above to see your plan
+                {ready ? 'Ready when you are' : 'Add your numbers above to see your plan'}
               </h2>
               <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-                Your age and at least one pot or contribution are enough to begin.
-                Nothing is saved or sent.
+                {ready
+                  ? 'Hit "Create your plan" above to see your results.'
+                  : 'Your age and at least one pot or contribution are enough to begin. Nothing is saved or sent.'}
               </p>
             </div>
           )}
