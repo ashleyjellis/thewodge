@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Compass, LineChart, Pencil, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { BookmarkPlus, Compass, LineChart, Pencil, ShieldCheck, type LucideIcon } from 'lucide-react'
 import { CASH_RATE, INVESTED_RATE, SITE_NAME, SITE_URL } from '@/config'
 import { seo } from '@/lib/seo'
 import { cn } from '@/lib/cn'
@@ -15,12 +15,14 @@ import {
   type WealthPlanSearch,
 } from '@/lib/wealthPlanSearch'
 import { percent } from '@/lib/format'
+import { type HookId } from '@/lib/hooks'
 import { MaxWidthContainer } from '@/components/site/Container'
 import { Prose } from '@/components/site/Page'
 import { NavLink } from '@/components/NavLink'
 import { WealthPlanForm } from '@/components/wealthPlan/WealthPlanForm'
 import { WealthPlanResults } from '@/components/wealthPlan/WealthPlanResults'
 import { PersonEditModal } from '@/components/wealthPlan/PersonEditModal'
+import { HookModal } from '@/components/results/HookModal'
 
 /** Shown on a cold landing (no search params at all) so the page — and crawlers —
  *  see a fully worked example rather than an empty form. Illustrative only; the
@@ -189,6 +191,12 @@ function WealthPlanningToolPage() {
   // rather than reusing formPersonId.
   const [editingResultPersonId, setEditingResultPersonId] = useState<string | null>(null)
   const editingResultPerson = people.find((p) => p.id === editingResultPersonId)
+
+  // The sticky bar's "Save plan" button — same shared HookModal the free
+  // calculator's "Save this forecast" already uses: dismissible three ways
+  // (backdrop, X, "Not now"), only ever opens on a deliberate click, never
+  // a blocking pop-up.
+  const [activeHook, setActiveHook] = useState<HookId | null>(null)
 
   // Results stay hidden on first load — even once there's enough to show —
   // until the visitor explicitly asks to see them, either via "Create your
@@ -412,6 +420,7 @@ function WealthPlanningToolPage() {
                 selectedId={validSelectedId}
                 onSelect={setSelectedPersonId}
                 onEditPerson={setEditingResultPersonId}
+                onSavePlan={() => setActiveHook('save-plan')}
               />
               <WealthPlanResults
                 key={validSelectedId}
@@ -450,6 +459,8 @@ function WealthPlanningToolPage() {
         />
       ) : null}
 
+      <HookModal hookId={activeHook} onClose={() => setActiveHook(null)} />
+
       <MaxWidthContainer className="border-t border-border/60 py-12 lg:py-16">
         <Prose>
           <h2>Frequently asked questions</h2>
@@ -483,24 +494,27 @@ function WealthPlanningToolPage() {
 
 /**
  * Sticks below the site header once you scroll into the results (top-16,
- * z-40 — under the header's own z-50). Two jobs: the Joint/person filter
+ * z-40 — under the header's own z-50). Three jobs: the Joint/person filter
  * chips (only shown once there's someone besides "You" to switch between —
  * Joint is the whole household, combined and look-only; each person's own
- * chip is their own editable forecast), and an "Edit inputs" shortcut for
- * whoever's currently selected, so a tweak doesn't mean scrolling all the
- * way back up to the form. Hidden on Joint — there's no single person's
- * inputs to open from a combined view.
+ * chip is their own editable forecast), an "Edit inputs" shortcut for
+ * whoever's currently selected (hidden on Joint — there's no single
+ * person's inputs to open from a combined view), and "Save plan" — always
+ * visible regardless of who's selected, opens the same dismissible
+ * HookModal the free calculator's own save prompt uses.
  */
 function StickyResultsBar({
   people,
   selectedId,
   onSelect,
   onEditPerson,
+  onSavePlan,
 }: {
   people: Person[]
   selectedId: string
   onSelect: (id: string) => void
   onEditPerson: (id: string) => void
+  onSavePlan: () => void
 }) {
   const selectedPerson = people.find((p) => p.id === selectedId)
 
@@ -539,16 +553,26 @@ function StickyResultsBar({
       ) : (
         <div />
       )}
-      {selectedPerson ? (
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {selectedPerson ? (
+          <button
+            type="button"
+            onClick={() => onEditPerson(selectedPerson.id)}
+            className="flex items-center gap-1.5 rounded-full bg-muted px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/70"
+          >
+            <Pencil size={13} strokeWidth={2.25} />
+            Edit {selectedPerson.name}'s inputs
+          </button>
+        ) : null}
         <button
           type="button"
-          onClick={() => onEditPerson(selectedPerson.id)}
-          className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/70"
+          onClick={onSavePlan}
+          className="flex items-center gap-1.5 rounded-full bg-muted px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/70"
         >
-          <Pencil size={13} strokeWidth={2.25} />
-          Edit {selectedPerson.name}'s inputs
+          <BookmarkPlus size={13} strokeWidth={2.25} />
+          Save plan
         </button>
-      ) : null}
+      </div>
     </div>
   )
 }

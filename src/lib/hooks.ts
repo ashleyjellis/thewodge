@@ -12,6 +12,7 @@ export type HookId =
   | 'employer-split'
   | 'partner'
   | 'save-forecast'
+  | 'save-plan'
 
 export type HookContent = {
   eyebrow: string
@@ -49,6 +50,12 @@ export const HOOKS: Record<HookId, HookContent> = {
     eyebrow: 'keep this',
     title: 'Save this forecast',
     body: 'A free account keeps this forecast and lets you come back to see how it’s tracking — the same calm view, over time, measured only against where you started.',
+    ctaLabel: 'Create a free account to save this',
+  },
+  'save-plan': {
+    eyebrow: 'keep this',
+    title: 'Save this plan',
+    body: 'A free account keeps your pension, ISAs and cash together and lets you come back to see how they’re actually moving — updated as reality changes, not modelled once and left behind.',
     ctaLabel: 'Create a free account to save this',
   },
 }
