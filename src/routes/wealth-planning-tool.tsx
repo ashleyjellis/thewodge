@@ -44,18 +44,18 @@ const EXAMPLE: WealthPlanSearch = {
 const USPS: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Compass,
-    title: 'Fully Independent',
-    body: 'Built by you, for you and your financial needs.',
+    title: 'Independent, properly',
+    body: "No bank standing behind this, no product we're steering you toward. Just your numbers, worked through honestly.",
   },
   {
     icon: ShieldCheck,
-    title: 'Your Data Secure',
-    body: 'Our top priority is keeping your data safe with fully encrypted storage.',
+    title: 'Locked down',
+    body: "Bank-grade encryption. We don't sell your data — we're not that kind of free.",
   },
   {
     icon: LineChart,
-    title: 'Your Free Plan',
-    body: 'See your holistic household financial plan and get free insights.',
+    title: 'Free. Actually free.',
+    body: 'Your full household picture: three pots, one plan, and the year they cross over. No card, no catch.',
   },
 ]
 
@@ -331,17 +331,19 @@ function WealthPlanningToolPage() {
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-start lg:gap-x-40 lg:gap-y-14">
               <div className="max-w-xl">
                 <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  60 secs for a full financial view
+                  Pension. ISAs. Cash. Three jobs, not one pile.
                 </p>
                 <h1 className="mt-3 text-[36px] font-semibold leading-[1.1] tracking-tight">
-                  You've spent a decade building your wealth. See what it's actually
-                  worth.
+                  You've spent a decade building this. Let's find the year it starts
+                  building itself.
                 </h1>
                 <p className="mt-5 text-[17px] leading-relaxed text-muted-foreground">
-                  See your pension, ISAs &amp; cash together — today's position and
-                  tomorrow's trajectory. Nothing to guess at, nothing missed. A
-                  planning tool, not advice: the numbers, and the confidence, are
-                  yours.
+                  Your pension, ISAs and cash aren't one number — they're three
+                  different tools, unlocking at three different times. See them
+                  separately, see where each is actually headed, and see the exact
+                  year the market starts doing more of the work than you do. Every
+                  number's shown. Every assumption's editable. It's your plan, not
+                  our advice.
                 </p>
 
                 <div className="mt-8 space-y-4">
