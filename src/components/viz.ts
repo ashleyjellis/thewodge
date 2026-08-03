@@ -23,6 +23,14 @@ export const fillClass: Record<Tone, string> = {
   muted: 'bg-muted',
 }
 
+/** text colour for a label sat directly on that segment's own fill */
+export const labelTextClass: Record<Tone, string> = {
+  you: 'text-primary-foreground',
+  market: 'text-accent-foreground',
+  cash: 'text-foreground',
+  muted: 'text-foreground',
+}
+
 /** SVG fill via the theme variable (no hardcoded hex) */
 export const svgFill: Record<Tone, string> = {
   you: 'var(--color-foreground)',

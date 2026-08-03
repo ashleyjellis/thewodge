@@ -332,7 +332,7 @@ export function Field({
   value: string
   onChange: (v: string) => void
   placeholder?: string
-  inputMode?: 'numeric' | 'decimal'
+  inputMode?: 'text' | 'numeric' | 'decimal'
   className?: string
 }) {
   // strip commas so "120,000" pastes cleanly

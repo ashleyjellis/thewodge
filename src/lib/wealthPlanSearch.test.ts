@@ -45,6 +45,12 @@ describe('searchToPeople / peopleToSearch (household URL encoding)', () => {
     expect(people[0]!.pension).toBe(50_000)
   })
 
+  it('renaming person 1 away from "You" round-trips — not lost on save', () => {
+    const s = peopleToSearch([person({ id: 'a', name: 'Ashley', age: 34, pension: 50_000 })])
+    const people = searchToPeople(s)
+    expect(people[0]!.name).toBe('Ashley')
+  })
+
   it('reads people 2-4 from their prefixed fields', () => {
     const s = validateWealthPlanSearch({
       age: 34,
@@ -90,7 +96,6 @@ describe('searchToPeople / peopleToSearch (household URL encoding)', () => {
     const roundTripped = searchToPeople(s)
 
     expect(roundTripped).toHaveLength(3)
-    // person 1 has no separate "name" concept in the URL — always "You"
     expect(roundTripped[0]!.name).toBe('You')
     expect(roundTripped[0]!.age).toBe(34)
     expect(roundTripped[0]!.pension).toBe(80_000)
@@ -126,18 +131,18 @@ describe('searchToPeople / peopleToSearch (household URL encoding)', () => {
     const s = peopleToSearch(people)
     const roundTripped = searchToPeople(s)
     expect(roundTripped).toHaveLength(4)
-    expect(roundTripped.map((p) => p.name)).toEqual(['You', 'B', 'C', 'D'])
+    expect(roundTripped.map((p) => p.name)).toEqual(['Someone', 'B', 'C', 'D'])
   })
 
   it('removing a middle person and re-encoding shifts the rest down, leaving no gap', () => {
     const before = searchToPeople(
       peopleToSearch([person({ age: 34 }), person({ age: 30, name: 'B' }), person({ age: 31, name: 'C' })]),
     )
-    expect(before.map((p) => p.name)).toEqual(['You', 'B', 'C'])
+    expect(before.map((p) => p.name)).toEqual(['Someone', 'B', 'C'])
 
     // drop "B", exactly as the route would after a removal, then re-encode
     const after = searchToPeople(peopleToSearch([before[0]!, before[2]!]))
-    expect(after.map((p) => p.name)).toEqual(['You', 'C'])
+    expect(after.map((p) => p.name)).toEqual(['Someone', 'C'])
     expect(after[1]!.id).toBe('person-2')
   })
 

@@ -1,10 +1,11 @@
 /**
  * Stacked bar (brand guide §6): a single h-7 rounded-full track with flex children
- * sized by percentage. No labels inside the bar — the legend rows underneath (built
- * from StatRow) carry the meaning.
+ * sized by percentage. A segment over 10% of the total gets its own whole-number
+ * percentage label; the legend rows underneath (built from StatRow) carry the
+ * rest of the meaning, including for slimmer segments.
  */
 import { cn } from '@/lib/cn'
-import { fillClass, type Tone } from './viz'
+import { fillClass, labelTextClass, type Tone } from './viz'
 
 export type BarSegment = {
   tone: Tone
@@ -37,12 +38,27 @@ export function StackedBar({
         ? segments.map((seg, i) => {
             const width = (Math.max(0, seg.value) / total) * 100
             if (width <= 0) return null
+            const p = pct(seg.value, total)
             return (
               <div
                 key={i}
-                className={cn('h-full', fillClass[seg.tone])}
+                className={cn(
+                  'flex h-full items-center justify-center overflow-hidden',
+                  fillClass[seg.tone],
+                )}
                 style={{ width: `${width}%` }}
-              />
+              >
+                {p > 10 ? (
+                  <span
+                    className={cn(
+                      'text-[11px] font-semibold tabular-nums',
+                      labelTextClass[seg.tone],
+                    )}
+                  >
+                    {p}%
+                  </span>
+                ) : null}
+              </div>
             )
           })
         : null}

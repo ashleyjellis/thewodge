@@ -5,11 +5,12 @@
  * because this tool asks for four named pots (not three) plus a salary-based
  * pension percentage and a bonus — genuinely different shape, not an extension.
  *
- * A household beyond one person is encoded the same way: person 1 ("You")
- * keeps these exact flat params, unprefixed, so every URL that already exists
- * keeps working unchanged. People 2-4 get the same field set again, each
- * under its own p2_/p3_/p4_ prefix — flat and readable rather than a JSON
- * blob, so a shared link stays inspectable. See searchToPeople/peopleToSearch.
+ * A household beyond one person is encoded the same way: person 1 ("You" by
+ * default, but renameable like everyone else) keeps these exact flat params,
+ * unprefixed, so every URL that already exists keeps working unchanged.
+ * People 2-4 get the same field set again, each under its own p2_/p3_/p4_
+ * prefix — flat and readable rather than a JSON blob, so a shared link stays
+ * inspectable. See searchToPeople/peopleToSearch.
  */
 import { CASH_RATE, INVESTED_RATE, TARGET_AGE } from '../config'
 import type { Assumptions } from './forecast'
@@ -18,8 +19,8 @@ import type { PotKey, WealthPlanInput } from './wealthPlan'
 import { POT_KEYS } from './wealthPlan'
 
 /** The field set collected for any one person — identical for "You" and
- *  every additional person, per-person retirement age included. Person 1
- *  alone omits `name` in the URL (always shown as "You"). */
+ *  every additional person, per-person retirement age included, name and
+ *  all. Person 1 defaults to "You" only when the URL has no name for them. */
 type PersonFields = {
   name?: string
   age?: number
@@ -62,7 +63,7 @@ const PERSON_FIELD_NAMES = [
 export const MAX_PEOPLE = 4
 const PERSON_PREFIXES = ['p2_', 'p3_', 'p4_'] as const
 
-export type WealthPlanSearch = Omit<PersonFields, 'name'> & {
+export type WealthPlanSearch = PersonFields & {
   /** whole percent — pension + ISA stocks & shares; defaults to the sitewide rate */
   investedRatePct?: number
   /** whole percent — ISA cash + cash savings; defaults to the sitewide rate */
@@ -119,9 +120,8 @@ function prefixFields(prefix: string, fields: PersonFields): Record<string, unkn
 export function validateWealthPlanSearch(
   search: Record<string, unknown>,
 ): WealthPlanSearch {
-  const { name: _dropped, ...person1 } = validatePersonFields(search, '')
   const out: WealthPlanSearch = {
-    ...person1,
+    ...validatePersonFields(search, ''),
     investedRatePct: NON_NEGATIVE(search.investedRatePct),
     cashRatePct: NON_NEGATIVE(search.cashRatePct),
   }
@@ -208,12 +208,13 @@ function inputToSearchFields(input: WealthPlanInput): Omit<PersonFields, 'name'>
  *  because the page re-read its own search params. */
 const personId = (position: number) => `person-${position + 1}`
 
-/** URL -> people. Person 1 ("You") always exists, built from today's flat
- *  fields. People 2-4 are read in prefix order and compacted — a prefix with
- *  nothing set simply isn't a person, so removing someone never leaves a gap
- *  the next person has to "skip" (see peopleToSearch, its exact inverse). */
+/** URL -> people. Person 1 always exists, built from today's flat fields,
+ *  named "You" unless the URL says otherwise. People 2-4 are read in prefix
+ *  order and compacted — a prefix with nothing set simply isn't a person, so
+ *  removing someone never leaves a gap the next person has to "skip" (see
+ *  peopleToSearch, its exact inverse). */
 export function searchToPeople(s: WealthPlanSearch): Person[] {
-  const people: Person[] = [{ id: personId(0), name: 'You', ...toWealthPlanInput(s) }]
+  const people: Person[] = [{ id: personId(0), name: s.name ?? 'You', ...toWealthPlanInput(s) }]
   for (const prefix of PERSON_PREFIXES) {
     const fields = personFieldsAt(s, prefix)
     if (PERSON_FIELD_NAMES.every((field) => fields[field] === undefined)) continue
@@ -236,12 +237,15 @@ function personFieldsAt(s: WealthPlanSearch, prefix: string): PersonFields {
 }
 
 /** People -> URL, the exact inverse of searchToPeople. Person 1 always maps
- *  to the unprefixed fields; people 2-4 map onto p2_/p3_/p4_ in array order,
- *  so removing someone shifts everyone after them down rather than leaving a
- *  hole. Anything beyond MAX_PEOPLE is silently dropped — the form is the
- *  one place that should ever let the array grow that long. */
+ *  to the unprefixed fields, name included; people 2-4 map onto p2_/p3_/p4_
+ *  in array order, so removing someone shifts everyone after them down
+ *  rather than leaving a hole. Anything beyond MAX_PEOPLE is silently
+ *  dropped — the form is the one place that should ever let the array grow
+ *  that long. */
 export function peopleToSearch(people: Person[]): WealthPlanSearch {
-  const out: WealthPlanSearch = people[0] ? inputToSearchFields(people[0]) : {}
+  const out: WealthPlanSearch = people[0]
+    ? { name: people[0].name, ...inputToSearchFields(people[0]) }
+    : {}
   people
     .slice(1, MAX_PEOPLE)
     .forEach((person, i) =>
