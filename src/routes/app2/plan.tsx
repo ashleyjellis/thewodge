@@ -1,7 +1,13 @@
 /**
- * The Forecast tab (spec §4) — the household's plan, how reality is tracking
- * against it, and a deliberate way to fork a new plan when life changes,
- * without ever losing the original.
+ * Plan — the forecast + the sandbox (spec §4). For now this is a direct
+ * copy of /app/forecast.tsx's content (owner filter, scenarios, the live
+ * Plan table, the year-by-year ledger, workings, and the existing Replan
+ * block) rather than a shared component with it. That's deliberate, not an
+ * oversight: the Replan block gets replaced wholesale by the checkpoint
+ * mechanic in a later phase, at which point this file and /app/forecast.tsx
+ * genuinely diverge — extracting a shared component now would just mean
+ * un-extracting it again almost immediately. ScenariosTable was extracted
+ * because it *isn't* changing, so both pages get it for free.
  */
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
@@ -31,21 +37,21 @@ import { FilterPill } from '@/components/app/FilterPill'
 import { ScenariosTable } from '@/components/app/ScenariosTable'
 import { NavLink } from '@/components/NavLink'
 
-const forecastSeo = seo({
-  title: `Forecast — ${SITE_NAME}`,
+const planSeo = seo({
+  title: `Plan — ${SITE_NAME}`,
   description: 'Your plan, how reality is tracking against it, and a deliberate way to replan.',
-  path: '/app/forecast',
+  path: '/app2/plan',
 })
 
-export const Route = createFileRoute('/app/forecast')({
+export const Route = createFileRoute('/app2/plan')({
   head: () => ({
-    links: forecastSeo.links,
-    meta: [...forecastSeo.meta, { name: 'robots', content: 'noindex' }],
+    links: planSeo.links,
+    meta: [...planSeo.meta, { name: 'robots', content: 'noindex' }],
   }),
-  component: Forecast,
+  component: Plan,
 })
 
-function Forecast() {
+function Plan() {
   const { household, people, loading: householdLoading, error: householdError } = useHousehold()
   const { accounts, loading: accountsLoading } = useAccounts(household?.id ?? null)
   const { snapshots, loading: snapshotsLoading } = useSnapshots(household?.id ?? null)
@@ -111,7 +117,7 @@ function Forecast() {
         {header}
         <p className="text-[14px] text-muted-foreground">
           Add at least one person and one account on the{' '}
-          <NavLink to="/app/accounts" className="underline underline-offset-2">
+          <NavLink to="/app2/accounts" className="underline underline-offset-2">
             Accounts tab
           </NavLink>{' '}
           first — Forecast projects the real numbers set up there.

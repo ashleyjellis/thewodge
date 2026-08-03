@@ -1,8 +1,12 @@
 /**
  * The authenticated area's own chrome — distinct from the marketing site's
- * SiteHeader/SiteFooter. A slim tab bar (Dashboard / Accounts / Growth /
- * Forecast / Insights). No footer; this is a working tool, not a content
- * page.
+ * SiteHeader/SiteFooter. A slim tab bar. No footer; this is a working tool,
+ * not a content page.
+ *
+ * The tab set is a prop, not hardcoded, so /app2's three-section IA
+ * (Today/Plan/Accounts) can share this exact shell rather than forking it —
+ * defaults to /app's own five tabs so every existing call site (which never
+ * passes `tabs`) renders exactly as before.
  */
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -11,7 +15,9 @@ import { SITE_NAME } from '@/config'
 import { NavLink } from '@/components/NavLink'
 import { MaxWidthContainer } from '@/components/site/Container'
 
-const TABS = [
+export type AppTab = { to: string; label: string }
+
+const DEFAULT_TABS: AppTab[] = [
   { to: '/app/dashboard', label: 'Dashboard' },
   { to: '/app/accounts', label: 'Accounts' },
   { to: '/app/growth', label: 'Growth' },
@@ -33,9 +39,11 @@ const FROM_COPY: Record<string, string> = {
 export function AppShell({
   children,
   fromHook,
+  tabs = DEFAULT_TABS,
 }: {
   children: ReactNode
   fromHook?: string
+  tabs?: AppTab[]
 }) {
   const [dismissed, setDismissed] = useState(false)
   const fromLine = fromHook ? FROM_COPY[fromHook] : undefined
@@ -54,7 +62,7 @@ export function AppShell({
             </NavLink>
 
             <nav className="flex min-w-0 items-center gap-1 overflow-x-auto">
-              {TABS.map((tab) => (
+              {tabs.map((tab) => (
                 <NavLink
                   key={tab.to}
                   to={tab.to}
