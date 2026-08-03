@@ -1,9 +1,15 @@
 /**
- * Wealth planning tool results — whole-picture hero, the four-pot split,
- * growth-vs-contribution split, the bonus note, the crossover moment, and the
+ * Wealth planning tool results — whole-picture hero, the crossover-year hero,
+ * the four-pot split, growth-vs-contribution split, the bonus note, and the
  * year-by-year table. Consequences, not verdicts: no comparison to anyone, no
  * "on track / behind" language anywhere — same rules as the free calculator's
  * results, applied to four named pots instead of three.
+ *
+ * Two "save this plan" prompts (SavePlanCallout) sit inline, each earned by
+ * the moment right above it — after the household figure (joint view only)
+ * and after the crossover reveal — plus the existing one at the very end.
+ * Deliberately not a persistent banner: each appears once, tied to something
+ * the visitor just saw, never sticky or blocking.
  *
  * `people` is whichever set of people this particular result belongs to —
  * exactly one person for an individual's own view (still fully editable),
@@ -11,7 +17,7 @@
  * contributions can only be tweaked one person at a time, so editing is
  * disabled and the bonus/pension workings switch to combined phrasing).
  */
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Person } from '@/lib/household'
 import type { ContributionOverride, RateOverride, WealthPlanResult } from '@/lib/wealthPlan'
 import { POT_LABELS } from '@/lib/wealthPlan'
@@ -93,7 +99,7 @@ export function WealthPlanResults({
           .
         </p>
         <p className="mt-4 text-[17px] leading-snug text-muted-foreground sm:text-[19px]">
-          Carry on as you are and by {result.targetAge} you’ll have
+          This is what today’s decisions are already worth, by {result.targetAge}
         </p>
         <div className="mt-2 text-[52px] font-semibold leading-none tracking-tight tabular-nums sm:text-[68px]">
           {money(result.projectedTotal)}
@@ -113,6 +119,72 @@ export function WealthPlanResults({
           </button>
         ) : null}
       </div>
+
+      {/* earned, not persistent: only the joint view has a household figure
+          to react to, and it only ever appears here, once */}
+      {isJoint ? (
+        <SavePlanCallout
+          message={
+            <>
+              <span className="font-semibold text-primary-foreground">
+                This is calculated once, not kept together.
+              </span>{' '}
+              Add a pay rise or a new pot for either of you and these numbers are
+              already behind — the full household tool keeps everyone updated,
+              together, not retyped each time.
+            </>
+          }
+          ctaLabel="Keep everyone updated →"
+        />
+      ) : null}
+
+      {/* the crossover moment — its own hero, not a buried aside; jumps to
+          its row in the table below.
+          FLAG for Ashley, not resolved in this pass: this is personalised,
+          data-derived commentary shown with no signup required — the same
+          territory as the "we ask first" pillar already flagged internally
+          against the FCA April 2026 targeted support regime. This round only
+          changes its visual treatment (small callout -> full hero moment)
+          and adds a save-plan prompt beside it; it does not change what the
+          copy claims. Check the whole moment against that regulatory
+          decision before extending its substance further. */}
+      {crossoverAge !== null ? (
+        <>
+          <div className="rounded-3xl bg-card p-7 shadow-soft sm:p-10">
+            <p className="text-[17px] leading-snug text-muted-foreground sm:text-[19px]">
+              This is your crossover year
+            </p>
+            <div className="mt-2 text-[52px] font-semibold leading-none tracking-tight tabular-nums sm:text-[68px]">
+              Age {crossoverAge}
+            </div>
+            <p className="mt-4 text-[13px] text-muted-foreground">
+              From here, growth on what you already hold typically adds more in a
+              year than everything you put in — quietly, from then on.
+            </p>
+            <button
+              type="button"
+              onClick={() => jumpToYear(result.crossoverYear!)}
+              className="mt-4 text-[12.5px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              See it in the table below ↓
+            </button>
+          </div>
+
+          <SavePlanCallout
+            message={
+              <>
+                <span className="font-semibold text-primary-foreground">
+                  This crossover year is a snapshot, not a moving target.
+                </span>{' '}
+                Get a raise or change a contribution and it’s already out of date —
+                the full tool tracks your actual crossover year as it happens, not
+                just once.
+              </>
+            }
+            ctaLabel="Track it as it happens →"
+          />
+        </>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* the four-pot split */}
@@ -229,25 +301,6 @@ export function WealthPlanResults({
         </div>
       ) : null}
 
-      {/* the crossover moment — named here, jumps to its row in the table below */}
-      {crossoverAge !== null ? (
-        <div className="rounded-2xl bg-accent/40 px-5 py-4">
-          <p className="max-w-xl text-[13px] leading-relaxed text-foreground/80">
-            <span className="font-semibold text-foreground">Worth pausing on:</span>{' '}
-            from around age {crossoverAge}, growth on what you already hold
-            typically adds more in a year than everything you put in that year —
-            quietly, from then on.
-          </p>
-          <button
-            type="button"
-            onClick={() => jumpToYear(result.crossoverYear!)}
-            className="mt-2 text-[12.5px] font-medium text-foreground/70 underline underline-offset-2 hover:text-foreground"
-          >
-            See it in the table below ↓
-          </button>
-        </div>
-      ) : null}
-
       {/* the year-by-year table */}
       <WealthPlanYearlyTable
         yearly={result.yearly}
@@ -325,22 +378,38 @@ export function WealthPlanResults({
       </p>
 
       {/* the honest step-up — this is a one-off forecast, not a tracked plan */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-foreground p-6 text-primary-foreground shadow-soft sm:p-7">
-        <p className="max-w-md text-[14px] leading-relaxed text-primary-foreground/90">
-          <span className="font-semibold text-primary-foreground">
-            It’s a snapshot, not a tracked plan.
-          </span>{' '}
-          Come back next month and you’re retyping these same numbers — the full
-          household tool keeps them updated as reality moves, tracked over time
-          instead of modelled once.
-        </p>
-        <NavLink
-          to="/app"
-          className="inline-flex shrink-0 items-center justify-center rounded-full bg-background px-5 py-3 text-[14px] font-semibold text-foreground transition-opacity hover:opacity-95"
-        >
-          See the full household picture →
-        </NavLink>
-      </div>
+      <SavePlanCallout
+        message={
+          <>
+            <span className="font-semibold text-primary-foreground">
+              It’s a snapshot, not a tracked plan.
+            </span>{' '}
+            Come back next month and you’re retyping these same numbers — the full
+            household tool keeps them updated as reality moves, tracked over time
+            instead of modelled once.
+          </>
+        }
+        ctaLabel="See the full household picture →"
+      />
+    </div>
+  )
+}
+
+/** The one signup prompt shape used everywhere on this page — plain,
+ *  first-person, states the free version's limitation and what an account
+ *  adds, no urgency tricks. Always inline, never a blocking modal or a
+ *  fixed/sticky banner: each instance is placed once, earned by whatever
+ *  the visitor just saw immediately above it. */
+function SavePlanCallout({ message, ctaLabel }: { message: ReactNode; ctaLabel: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-foreground p-6 text-primary-foreground shadow-soft sm:p-7">
+      <p className="max-w-md text-[14px] leading-relaxed text-primary-foreground/90">{message}</p>
+      <NavLink
+        to="/app"
+        className="inline-flex shrink-0 items-center justify-center rounded-full bg-background px-5 py-3 text-[14px] font-semibold text-foreground transition-opacity hover:opacity-95"
+      >
+        {ctaLabel}
+      </NavLink>
     </div>
   )
 }
