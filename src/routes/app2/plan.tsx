@@ -34,6 +34,7 @@ import { buildScheduledForecastYearRows, buildScheduledPlan, buildScheduledPlanI
 import { checkpointSchedule } from '@/lib/checkpointState'
 import { buildPlanBand } from '@/lib/planBand'
 import { money, percent } from '@/lib/format'
+import { BandChart, type BandPoint } from '@/components/BandChart'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { ForecastYearTable } from '@/components/app/ForecastYearTable'
 import { PlanTable } from '@/components/app/PlanTable'
@@ -43,6 +44,17 @@ import { ScenariosTable } from '@/components/app/ScenariosTable'
 import { NavLink } from '@/components/NavLink'
 
 const DOWN_YEAR_OPTIONS = [0, 1, 2, 3, 5]
+
+// Phase 6: proves BandChart renders correctly before Phase 7 swaps this for
+// real planBand.ts output — a plausible illustrative curve, not real numbers.
+const FIXTURE_BAND_POINTS: BandPoint[] = [
+  { x: '2026', low: 50_000, mid: 52_000, high: 54_000 },
+  { x: '2029', low: 90_000, mid: 105_000, high: 118_000 },
+  { x: '2032', low: 140_000, mid: 175_000, high: 205_000 },
+  { x: '2035', low: 210_000, mid: 280_000, high: 340_000 },
+  { x: '2038', low: 300_000, mid: 430_000, high: 540_000 },
+  { x: '2041', low: 420_000, mid: 640_000, high: 830_000 },
+]
 
 const planSeo = seo({
   title: `Plan — ${SITE_NAME}`,
@@ -389,6 +401,14 @@ function Plan() {
             in your plan — not "no bad years happen" versus "some do." A real down-run can only ever
             cost you something, so High still sits below Mid.
           </p>
+
+          {/* Phase 6: the chart component itself, proven against fixture
+              numbers — real planBand.ts output (the band/mid values above)
+              gets wired in next, once the chart's own rendering is settled. */}
+          <p className="mt-5 text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Preview — example numbers
+          </p>
+          <BandChart points={FIXTURE_BAND_POINTS} className="mt-3" />
         </div>
       ) : null}
 
