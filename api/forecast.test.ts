@@ -109,6 +109,58 @@ describe('forecast API', () => {
     expect(afterData.original.id).toBe(originalId)
     expect(afterData.original.type).toBe('baseline')
   })
+
+  it('POST creates a checkpoint with no note required, which becomes the new plan-of-record', async () => {
+    const before = fakeRes()
+    await handleForecast(db, fakeReq({ method: 'GET', query: { householdId } }), before.res)
+    const originalId = (before.body() as { original: { id: string } }).original.id
+
+    const { res, status, body } = fakeRes()
+    await handleForecast(
+      db,
+      fakeReq({ method: 'POST', body: { householdId, kind: 'checkpoint' } }),
+      res,
+    )
+    expect(status()).toBe(201)
+    const checkpoint = (body() as { checkpoint: { id: string; type: string; note: string | null } })
+      .checkpoint
+    expect(checkpoint.type).toBe('checkpoint')
+    expect(checkpoint.note).toBeNull()
+
+    const after = fakeRes()
+    await handleForecast(db, fakeReq({ method: 'GET', query: { householdId } }), after.res)
+    const afterData = after.body() as { current: { id: string; type: string }; original: { id: string } }
+    expect(afterData.current.id).toBe(checkpoint.id)
+    expect(afterData.current.type).toBe('checkpoint')
+    // a checkpoint re-baselines "current" but never touches the original
+    expect(afterData.original.id).toBe(originalId)
+  })
+
+  it('POST creates a checkpoint with an optional label, stored as its note', async () => {
+    const { res, status, body } = fakeRes()
+    await handleForecast(
+      db,
+      fakeReq({ method: 'POST', body: { householdId, kind: 'checkpoint', label: 'just checking in' } }),
+      res,
+    )
+    expect(status()).toBe(201)
+    expect((body() as { checkpoint: { note: string } }).checkpoint.note).toBe('just checking in')
+  })
+
+  it('GET returns the full history, oldest first, spanning baseline/replan/checkpoint together', async () => {
+    const { res, status, body } = fakeRes()
+    await handleForecast(db, fakeReq({ method: 'GET', query: { householdId } }), res)
+    expect(status()).toBe(200)
+    const history = (body() as { history: { type: string }[] }).history
+    // this household, by now in the suite, has been through baseline -> replan -> checkpoint -> checkpoint
+    expect(history.length).toBeGreaterThanOrEqual(4)
+    expect(history[0]!.type).toBe('baseline')
+    expect(history.map((h) => h.type)).toContain('replan')
+    expect(history.at(-1)!.type).toBe('checkpoint')
+    // strictly oldest-first
+    const createdAts = (body() as { history: { createdAt: string }[] }).history.map((h) => h.createdAt)
+    expect([...createdAts].sort()).toEqual(createdAts)
+  })
 })
 
 describe('GET self-heals a baseline stored in a pre-owner-filter shape', () => {

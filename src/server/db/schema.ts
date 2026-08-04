@@ -205,7 +205,15 @@ export const accountSnapshots = sqliteTable(
 // household + people + accounts state so later changes never retroactively alter
 // what the baseline said.
 
-export const FORECAST_SNAPSHOT_TYPES = ['baseline', 'replan'] as const
+// 'checkpoint' added for /app2: a low-friction, no-note-required check-in
+// that (like a replan) becomes the new plan-of-record — see
+// forecastSnapshots.ts's createCheckpoint. getCurrentBaseline/
+// getOriginalBaseline below need no changes: "most recent row of any type"
+// already resolves a checkpoint correctly. Known cosmetic gap this creates:
+// /app/forecast.tsx's old "You replanned" banner (untouched, per plan) will
+// show that copy even when the divergence was actually a checkpoint — left
+// as-is for the Phase 15 cross-cutting pass rather than touching /app here.
+export const FORECAST_SNAPSHOT_TYPES = ['baseline', 'replan', 'checkpoint'] as const
 export type ForecastSnapshotType = (typeof FORECAST_SNAPSHOT_TYPES)[number]
 
 export const forecastSnapshots = sqliteTable(
@@ -223,7 +231,7 @@ export const forecastSnapshots = sqliteTable(
   },
   (t) => [
     index('forecast_snapshots_household_id_idx').on(t.householdId),
-    check('forecast_snapshots_type_check', sql`${t.type} in ('baseline','replan')`),
+    check('forecast_snapshots_type_check', sql`${t.type} in ('baseline','replan','checkpoint')`),
   ],
 )
 

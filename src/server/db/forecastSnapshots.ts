@@ -94,3 +94,23 @@ export async function createReplan(
     note: note.trim(),
   })
 }
+
+/**
+ * A checkpoint is a low-friction check-in — one click, an optional label,
+ * never a required note. Like a replan it becomes the new plan-of-record
+ * (see getCurrentBaseline), it just doesn't carry the "I deliberately
+ * changed my plan" weight a replan does.
+ */
+export async function createCheckpoint(
+  db: Db,
+  householdId: string,
+  householdStateJson: string,
+  label?: string | null,
+): Promise<ForecastSnapshot> {
+  return insertForecastSnapshot(db, {
+    householdId,
+    type: 'checkpoint',
+    householdStateJson,
+    note: label?.trim() || null,
+  })
+}

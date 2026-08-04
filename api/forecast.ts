@@ -1,10 +1,14 @@
 /**
- * GET  /api/forecast?householdId=X → the plan-of-record + original baseline,
- *      auto-creating a baseline from live state on first-ever visit (spec §4)
- *      if enough is set up to forecast. Returns { ready: false } when there
- *      isn't yet (no people, or no accounts).
- * POST /api/forecast               → { householdId, note } creates a replan
- *      from live state — always explicit, never automatic (spec §4).
+ * GET  /api/forecast?householdId=X → the plan-of-record + original baseline
+ *      + the full history (spec §4/app2: every baseline/replan/checkpoint,
+ *      oldest first), auto-creating a baseline from live state on
+ *      first-ever visit if enough is set up to forecast. Returns
+ *      { ready: false } when there isn't yet (no people, or no accounts).
+ * POST /api/forecast               → creates a new snapshot from live state,
+ *      always explicit, never automatic (spec §4). Defaults to a replan
+ *      (unaffected /app behaviour): { householdId, note }. /app2 also sends
+ *      { householdId, kind: 'checkpoint', label? } — a checkpoint needs no
+ *      note, unlike a replan.
  */
 import { getDb, type Db } from '../src/server/db/client.js'
 import { getOrCreateHousehold } from '../src/server/db/households.js'
@@ -12,6 +16,7 @@ import { listPeople } from '../src/server/db/people.js'
 import { listAccounts } from '../src/server/db/accounts.js'
 import {
   createBaseline,
+  createCheckpoint,
   createReplan,
   listForecastSnapshots,
   type ForecastSnapshot,
@@ -62,29 +67,43 @@ export async function handleForecast(db: Db, req: ApiRequest, res: ApiResponse):
       )
 
       let current: ForecastSnapshot | null = validSnapshots.at(-1) ?? null
+      // the auto-created baseline isn't in validSnapshots yet (it didn't
+      // exist when that list was read) — history must still include it
+      let history = validSnapshots
       if (!current) {
         const state = aggregateHouseholdState(household, people, accounts)
         current = await createBaseline(db, householdId, JSON.stringify(state))
+        history = [current]
       }
       const original = validSnapshots.find((s) => s.type === 'baseline') ?? current
 
-      res.status(200).json({ ok: true, ready: true, current, original })
+      res.status(200).json({ ok: true, ready: true, current, original, history })
       return
     }
 
     if (req.method === 'POST') {
       const body = parseBody(req)
       if (typeof body.householdId !== 'string') return badRequest(res, 'householdId is required')
-      if (typeof body.note !== 'string' || !body.note.trim())
+      const kind: 'replan' | 'checkpoint' = body.kind === 'checkpoint' ? 'checkpoint' : 'replan'
+      if (kind === 'replan' && (typeof body.note !== 'string' || !body.note.trim()))
         return badRequest(res, 'a short note is required to replan')
 
       const household = await getOrCreateHousehold(db)
       const people = await listPeople(db, body.householdId)
       const accounts = await listAccounts(db, body.householdId)
-      if (!canForecast(people, accounts)) return badRequest(res, 'not enough set up to replan yet')
+      if (!canForecast(people, accounts))
+        return badRequest(res, `not enough set up to ${kind} yet`)
 
       const state = aggregateHouseholdState(household, people, accounts)
-      const replan = await createReplan(db, body.householdId, JSON.stringify(state), body.note)
+
+      if (kind === 'checkpoint') {
+        const label = typeof body.label === 'string' ? body.label : undefined
+        const checkpoint = await createCheckpoint(db, body.householdId, JSON.stringify(state), label)
+        res.status(201).json({ ok: true, checkpoint })
+        return
+      }
+
+      const replan = await createReplan(db, body.householdId, JSON.stringify(state), body.note as string)
       res.status(201).json({ ok: true, replan })
       return
     }

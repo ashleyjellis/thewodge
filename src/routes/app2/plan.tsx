@@ -1,13 +1,13 @@
 /**
- * Plan — the forecast + the sandbox (spec §4). For now this is a direct
- * copy of /app/forecast.tsx's content (owner filter, scenarios, the live
- * Plan table, the year-by-year ledger, workings, and the existing Replan
- * block) rather than a shared component with it. That's deliberate, not an
- * oversight: the Replan block gets replaced wholesale by the checkpoint
- * mechanic in a later phase, at which point this file and /app/forecast.tsx
- * genuinely diverge — extracting a shared component now would just mean
- * un-extracting it again almost immediately. ScenariosTable was extracted
- * because it *isn't* changing, so both pages get it for free.
+ * Plan — the forecast + the sandbox (spec §4). Still a near-direct copy of
+ * /app/forecast.tsx's content (owner filter, scenarios, the live Plan
+ * table, the year-by-year ledger, workings) rather than a shared component
+ * with it — deliberate, not an oversight: the checkpoint mechanic below
+ * (added on top of the old Replan block, which /app/forecast.tsx still has
+ * alone) is the first real divergence, and Phase 4 diverges further still.
+ * Extracting a shared component now would mean un-extracting it again
+ * almost immediately. ScenariosTable was extracted because it *isn't*
+ * changing, so both pages get it for free.
  */
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
@@ -17,6 +17,7 @@ import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
 import { useForecast } from '@/state/useForecast'
+import { useCheckpoints } from '@/state/useCheckpoints'
 import { usePlan } from '@/state/usePlan'
 import { postJson } from '@/lib/apiClient'
 import { forecast, projectYearly, type YearPoint } from '@/lib/forecast'
@@ -70,6 +71,7 @@ function Plan() {
     addPlannedEvent,
     removePlannedEvent,
   } = usePlan(household?.id ?? null)
+  const { saveCheckpoint } = useCheckpoints(household?.id ?? null)
 
   const [owner, setOwner] = useState<OwnerFilter>('total')
   const [pot, setPot] = useState<PotFilter>('total')
@@ -79,6 +81,10 @@ function Plan() {
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkpointLabel, setCheckpointLabel] = useState('')
+  const [savingCheckpoint, setSavingCheckpoint] = useState(false)
+  const [checkpointError, setCheckpointError] = useState<string | null>(null)
+  const [checkpointSaved, setCheckpointSaved] = useState(false)
 
   const header = (
     <div>
@@ -201,6 +207,21 @@ function Plan() {
     }
   }
 
+  const submitCheckpoint = async () => {
+    setSavingCheckpoint(true)
+    setCheckpointError(null)
+    try {
+      await saveCheckpoint(checkpointLabel)
+      setCheckpointLabel('')
+      setCheckpointSaved(true)
+      await refetch()
+    } catch (err) {
+      setCheckpointError(err instanceof Error ? err.message : 'failed to save checkpoint')
+    } finally {
+      setSavingCheckpoint(false)
+    }
+  }
+
   return (
     <div className="space-y-10">
       {header}
@@ -216,10 +237,10 @@ function Plan() {
       {hasReplanned ? (
         <div className="rounded-3xl bg-accent/30 p-6">
           <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            You replanned
+            Since your original plan
           </p>
           <p className="mt-2 text-[14px] leading-relaxed text-foreground">
-            “{current.note}” —{' '}
+            {current.note ? `“${current.note}” — ` : ''}
             {new Date(current.createdAt).toLocaleDateString('en-GB', {
               day: 'numeric',
               month: 'long',
@@ -277,6 +298,38 @@ function Plan() {
             quietly move it. Replan explicitly if life changes.
           </p>
         </HowWeWorkedThisOut>
+      </div>
+
+      <div className="rounded-3xl bg-card p-6 shadow-soft">
+        <h3 className="text-[15px] font-semibold tracking-tight">Save checkpoint</h3>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          A quick check-in, right now — no note required. See the full history on the Accounts
+          tab.
+        </p>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <AppField
+            label="Label (optional)"
+            placeholder="just checking in"
+            value={checkpointLabel}
+            onChange={(v) => {
+              setCheckpointLabel(v)
+              setCheckpointSaved(false)
+            }}
+            className="w-64"
+          />
+          <button
+            type="button"
+            disabled={savingCheckpoint}
+            onClick={() => void submitCheckpoint()}
+            className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-40"
+          >
+            {savingCheckpoint ? 'Saving…' : 'Save checkpoint'}
+          </button>
+        </div>
+        {checkpointError ? (
+          <p className="mt-2 text-[13px] text-muted-foreground">{checkpointError}</p>
+        ) : null}
+        {checkpointSaved ? <p className="mt-2 text-[13px] text-muted-foreground">Saved.</p> : null}
       </div>
 
       <div className="rounded-3xl bg-card p-6 shadow-soft">
