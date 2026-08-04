@@ -1,13 +1,14 @@
 /**
  * Today — the check-in screen, currently the Dashboard's own content
- * (DashboardBody). Gains its own bespoke behaviours — the ambient crossover
- * subtitle, the Today-if sandbox, movement moments, down-market
- * reassurance — in later phases.
+ * (DashboardBody) plus the Today-if sandbox. Gains its own bespoke
+ * behaviours — the ambient crossover subtitle, movement moments,
+ * down-market reassurance — in later phases.
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
 import { DashboardBody } from '@/components/app/DashboardBody'
+import { TodayIfSandbox } from '@/components/app/TodayIfSandbox'
 
 const todaySeo = seo({
   title: `Today — ${SITE_NAME}`,
@@ -20,5 +21,14 @@ export const Route = createFileRoute('/app2/today')({
     links: todaySeo.links,
     meta: [...todaySeo.meta, { name: 'robots', content: 'noindex' }],
   }),
-  component: () => <DashboardBody accountsPath="/app2/accounts" />,
+  component: Today,
 })
+
+function Today() {
+  return (
+    <div className="space-y-10">
+      <DashboardBody accountsPath="/app2/accounts" />
+      <TodayIfSandbox />
+    </div>
+  )
+}
