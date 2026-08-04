@@ -23,12 +23,15 @@ import { postJson } from '@/lib/apiClient'
 import { forecast, projectYearly, type YearPoint } from '@/lib/forecast'
 import {
   buildForecastYearRows,
+  isValidFrozenState,
   ownerStateToForecastInput,
+  type ForecastYearRow,
   type FrozenForecastState,
   type OwnerFilter,
   type PotFilter,
 } from '@/lib/householdForecast'
-import { buildScheduledPlan } from '@/lib/scheduledPlan'
+import { buildScheduledForecastYearRows, buildScheduledPlan } from '@/lib/scheduledPlan'
+import { checkpointSchedule } from '@/lib/checkpointState'
 import { money } from '@/lib/format'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { ForecastYearTable } from '@/components/app/ForecastYearTable'
@@ -71,7 +74,7 @@ function Plan() {
     addPlannedEvent,
     removePlannedEvent,
   } = usePlan(household?.id ?? null)
-  const { saveCheckpoint } = useCheckpoints(household?.id ?? null)
+  const { history: checkpointHistory, saveCheckpoint } = useCheckpoints(household?.id ?? null)
 
   const [owner, setOwner] = useState<OwnerFilter>('total')
   const [pot, setPot] = useState<PotFilter>('total')
@@ -179,6 +182,31 @@ function Plan() {
     currentCalendarYear,
     pot,
   })
+
+  // Once a checkpoint exists, the year-by-year ledger switches from the flat
+  // baseline (a single monthly figure assumed forever) to a replay of
+  // exactly what was scheduled at checkpoint time — the same
+  // ForecastYearRow shape, so ForecastYearTable renders either without
+  // changes. Falls back to the flat baseline above when there's no
+  // checkpoint yet, or its stored state predates a valid FrozenForecastState.
+  const latestCheckpoint = [...checkpointHistory].reverse().find((h) => h.type === 'checkpoint') ?? null
+  let scheduledRows: ForecastYearRow[] | null = null
+  if (latestCheckpoint) {
+    const parsed: unknown = JSON.parse(latestCheckpoint.householdStateJson)
+    if (isValidFrozenState(parsed)) {
+      scheduledRows = buildScheduledForecastYearRows({
+        checkpoint: { ...parsed, ...checkpointSchedule(parsed) },
+        checkpointCreatedAt: latestCheckpoint.createdAt,
+        owner,
+        accounts,
+        snapshots,
+        currentCalendarYear,
+        pot,
+      })
+    }
+  }
+  const tableRows = scheduledRows ?? rows
+
   // the live Plan table — always reflects the current schedule immediately,
   // unlike everything above which reads from the frozen baseline
   const planDefaultOwner = owner === 'total' ? (people[0] ? 'person_a' : 'joint') : owner
@@ -277,11 +305,21 @@ function Plan() {
         />
       ) : null}
 
-      <ForecastYearTable
-        rows={rows}
-        pot={pot}
-        onPotChange={setPot}
-      />
+      <div>
+        {scheduledRows ? (
+          <p className="mb-3 text-[13px] text-muted-foreground">
+            Against the schedule as it stood at your last checkpoint,{' '}
+            {new Date(latestCheckpoint!.createdAt).toLocaleDateString('en-GB', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}{' '}
+            — growth and contributions below are what that schedule actually implied, not a flat
+            guess.
+          </p>
+        ) : null}
+        <ForecastYearTable rows={tableRows} pot={pot} onPotChange={setPot} />
+      </div>
 
       <div className="rounded-3xl bg-card p-7 shadow-soft">
         <HowWeWorkedThisOut>

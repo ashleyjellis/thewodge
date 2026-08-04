@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildScheduledForecastYearRows,
   buildScheduledPlan,
+  buildScheduledPlanInput,
+  findScheduledCrossoverYear,
   projectScheduledYearly,
   resolveAnnualBonusSchedule,
   resolveContributionBreakdown,
@@ -469,5 +472,306 @@ describe('resolveContributionBreakdown', () => {
     const rows2028 = resolveContributionBreakdown({ year: 2028, accounts, changes })
     expect(rows2027.find((r) => r.owner === 'person_a' && r.potCategory === 'investments')!.monthly).toBe(25)
     expect(rows2028.find((r) => r.owner === 'person_a' && r.potCategory === 'investments')!.monthly).toBe(100)
+  })
+})
+
+describe('projectScheduledYearly rateOverrides', () => {
+  const pots: ScheduledPlanInput['pots'] = {
+    pension: { balance: 10_000, rate: 0.07, baseMonthly: 0 },
+    investments: { balance: 10_000, rate: 0.07, baseMonthly: 0 },
+    cash: { balance: 10_000, rate: 0.045, baseMonthly: 0 },
+  }
+
+  it('omitting rateOverrides entirely is a no-op — identical to today\'s existing behaviour', () => {
+    const withField = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 33,
+      pots,
+      changes: [],
+      events: [],
+    })
+    const withoutField: Omit<ScheduledPlanInput, 'rateOverrides'> = {
+      startYear: 2026,
+      age: 30,
+      targetAge: 33,
+      pots,
+      changes: [],
+      events: [],
+    }
+    const withUndefined = projectScheduledYearly({ ...withoutField, rateOverrides: undefined })
+    expect(withUndefined).toEqual(withField)
+  })
+
+  it('an override entry for one pot/year never touches any other pot or year', () => {
+    const overridden = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 32,
+      pots,
+      changes: [],
+      events: [],
+      rateOverrides: { investments: new Map([[2027, -0.2]]) }, // only investments, only 2027
+    })
+    const plain = projectScheduledYearly({ startYear: 2026, age: 30, targetAge: 32, pots, changes: [], events: [] })
+    // pension and cash are untouched in every year, at every pot
+    expect(overridden.find((p) => p.calendarYear === 2027)!.pension).toEqual(
+      plain.find((p) => p.calendarYear === 2027)!.pension,
+    )
+    expect(overridden.find((p) => p.calendarYear === 2027)!.cash).toEqual(
+      plain.find((p) => p.calendarYear === 2027)!.cash,
+    )
+    expect(overridden.find((p) => p.calendarYear === 2028)!.pension).toEqual(
+      plain.find((p) => p.calendarYear === 2028)!.pension,
+    )
+    expect(overridden.find((p) => p.calendarYear === 2028)!.cash).toEqual(
+      plain.find((p) => p.calendarYear === 2028)!.cash,
+    )
+  })
+
+  it('a negative override rate actually shrinks the pot that year, growth included', () => {
+    const overridden = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 31,
+      pots,
+      changes: [],
+      events: [],
+      rateOverrides: { investments: new Map([[2027, -0.2]]) },
+    })
+    const y1 = overridden.find((p) => p.calendarYear === 2027)!
+    expect(y1.investments.growth).toBeLessThan(0)
+    expect(y1.investments.endValue).toBeLessThan(10_000)
+  })
+
+  it('the rate is resolved fresh every year — a one-year override does not linger', () => {
+    const overridden = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 32,
+      pots,
+      changes: [],
+      events: [],
+      rateOverrides: { investments: new Map([[2027, -0.2]]) },
+    })
+    const plain = projectScheduledYearly({ startYear: 2026, age: 30, targetAge: 32, pots, changes: [], events: [] })
+    // 2028 has no override entry, so growth resumes at the normal 7% —
+    // the only difference from plain is a lower starting balance carried
+    // forward from 2027's stress year
+    expect(overridden.find((p) => p.calendarYear === 2028)!.investments.growth).toBeGreaterThan(0)
+    expect(overridden.find((p) => p.calendarYear === 2028)!.investments.endValue).toBeLessThan(
+      plain.find((p) => p.calendarYear === 2028)!.investments.endValue,
+    )
+  })
+})
+
+describe('findScheduledCrossoverYear', () => {
+  const pots: ScheduledPlanInput['pots'] = {
+    pension: { balance: 0, rate: 0.07, baseMonthly: 0 },
+    investments: { balance: 200_000, rate: 0.07, baseMonthly: 100 },
+    cash: { balance: 0, rate: 0.045, baseMonthly: 0 },
+  }
+
+  it('finds the first calendar year growth outpaces that year\'s contribution', () => {
+    const points = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 60,
+      pots,
+      changes: [],
+      events: [],
+    })
+    const year = findScheduledCrossoverYear(points)
+    expect(year).not.toBeNull()
+    const point = points.find((p) => p.calendarYear === year)!
+    expect(point.total.growth).toBeGreaterThan(point.total.contribution)
+    // every earlier year (excluding the all-zero seed point) hadn't crossed yet
+    for (const p of points) {
+      if (p.calendarYear >= 2027 && p.calendarYear < year!) {
+        expect(p.total.growth).toBeLessThanOrEqual(p.total.contribution)
+      }
+    }
+  })
+
+  it('never crosses over (returns null) when there is nothing invested and nothing contributed', () => {
+    const points = projectScheduledYearly({
+      startYear: 2026,
+      age: 30,
+      targetAge: 35,
+      pots: { pension: { balance: 0, rate: 0.07, baseMonthly: 0 }, investments: { balance: 0, rate: 0.07, baseMonthly: 0 }, cash: { balance: 0, rate: 0.045, baseMonthly: 0 } },
+      changes: [],
+      events: [],
+    })
+    expect(findScheduledCrossoverYear(points)).toBeNull()
+  })
+
+  it('ignores the all-zero seed point at index 0', () => {
+    const points = projectScheduledYearly({ startYear: 2026, age: 30, targetAge: 30, pots, changes: [], events: [] })
+    expect(points).toHaveLength(1) // just the seed point, no horizon
+    expect(findScheduledCrossoverYear(points)).toBeNull()
+  })
+})
+
+describe('buildScheduledPlanInput', () => {
+  const household = { realReturn: 0.07, cashReturn: 0.045 }
+  const people = [{ age: 30, retirementAge: 60 }]
+  const accounts: ScheduledPlanAccount[] = [
+    { owner: 'person_a', potCategory: 'investments', monthlyContribution: 500, currentBalance: 10_000 },
+  ]
+
+  it('resolves the same input buildScheduledPlan projects from', () => {
+    const input = buildScheduledPlanInput({
+      owner: 'total',
+      startYear: 2026,
+      people,
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })!
+    const viaHelper = projectScheduledYearly(input)
+    const viaBuildScheduledPlan = buildScheduledPlan({
+      owner: 'total',
+      startYear: 2026,
+      people,
+      household,
+      accounts,
+      changes: [],
+      events: [],
+    })!
+    expect(viaHelper).toEqual(viaBuildScheduledPlan)
+  })
+
+  it('returns null under the same conditions buildScheduledPlan does', () => {
+    expect(
+      buildScheduledPlanInput({ owner: 'person_b', startYear: 2026, people, household, accounts, changes: [], events: [] }),
+    ).toBeNull()
+  })
+})
+
+describe('buildScheduledForecastYearRows', () => {
+  const checkpoint = {
+    investedRate: 0.07,
+    cashRate: 0.045,
+    total: {
+      age: 30,
+      targetAge: 33,
+      pension: 0,
+      stocks: 10_000,
+      cash: 0,
+      monthly: 500,
+      pensionMonthly: 0,
+      cashMonthly: 0,
+    },
+    personA: null,
+    personB: null,
+    joint: { age: 30, targetAge: 33, pension: 0, stocks: 0, cash: 0, monthly: 0, pensionMonthly: 0, cashMonthly: 0 },
+  }
+
+  it('anchors the projection to the checkpoint\'s own creation year, not today', () => {
+    const rows = buildScheduledForecastYearRows({
+      checkpoint: { ...checkpoint, contributionChanges: [], plannedEvents: [] },
+      checkpointCreatedAt: '2026-03-15T00:00:00.000Z',
+      owner: 'total',
+      accounts: [],
+      snapshots: [],
+      currentCalendarYear: 2026,
+      pot: 'total',
+    })!
+    expect(rows[0]!.calendarYear).toBe(2026)
+    expect(rows.at(-1)!.calendarYear).toBe(2029)
+  })
+
+  it('originalValue is always null — this is a different comparison from the replan-fork model', () => {
+    const rows = buildScheduledForecastYearRows({
+      checkpoint: { ...checkpoint, contributionChanges: [], plannedEvents: [] },
+      checkpointCreatedAt: '2026-01-01T00:00:00.000Z',
+      owner: 'total',
+      accounts: [],
+      snapshots: [],
+      currentCalendarYear: 2026,
+      pot: 'total',
+    })!
+    expect(rows.every((r) => r.originalValue === null)).toBe(true)
+  })
+
+  it('a change scheduled after checkpoint save shows up in the replayed forecast', () => {
+    const changes: OwnerScopedContributionChange[] = [
+      { owner: 'joint', potCategory: 'investments', effectiveYear: 2028, changeType: 'set', value: 2_000 },
+    ]
+    const rows = buildScheduledForecastYearRows({
+      checkpoint: { ...checkpoint, contributionChanges: changes, plannedEvents: [] },
+      checkpointCreatedAt: '2026-01-01T00:00:00.000Z',
+      owner: 'total',
+      accounts: [],
+      snapshots: [],
+      currentCalendarYear: 2026,
+      pot: 'investments',
+    })!
+    expect(rows.find((r) => r.calendarYear === 2027)!.forecastAdditions).toBe(6_000) // still £500/mo
+    expect(rows.find((r) => r.calendarYear === 2028)!.forecastAdditions).toBe(24_000) // now £2,000/mo
+  })
+
+  it('owner filtering scopes both the schedule and the accounts used for actuals', () => {
+    const perOwnerCheckpoint = {
+      ...checkpoint,
+      personA: { age: 30, targetAge: 60, pension: 0, stocks: 5_000, cash: 0, monthly: 300, pensionMonthly: 0, cashMonthly: 0 },
+      personB: { age: 32, targetAge: 60, pension: 0, stocks: 3_000, cash: 0, monthly: 200, pensionMonthly: 0, cashMonthly: 0 },
+    }
+    const changes: OwnerScopedContributionChange[] = [
+      { owner: 'person_a', potCategory: 'investments', effectiveYear: 2027, changeType: 'set', value: 900 },
+      { owner: 'person_b', potCategory: 'investments', effectiveYear: 2027, changeType: 'set', value: 100 },
+    ]
+    const rows = buildScheduledForecastYearRows({
+      checkpoint: { ...perOwnerCheckpoint, contributionChanges: changes, plannedEvents: [] },
+      checkpointCreatedAt: '2026-01-01T00:00:00.000Z',
+      owner: 'person_a',
+      accounts: [],
+      snapshots: [],
+      currentCalendarYear: 2026,
+      pot: 'investments',
+    })!
+    expect(rows.find((r) => r.calendarYear === 2027)!.forecastAdditions).toBe(900 * 12) // not person_b's 100
+  })
+
+  it('returns null for a person who does not exist in the checkpoint', () => {
+    const rows = buildScheduledForecastYearRows({
+      checkpoint: { ...checkpoint, contributionChanges: [], plannedEvents: [] },
+      checkpointCreatedAt: '2026-01-01T00:00:00.000Z',
+      owner: 'person_a', // personA is null on this fixture
+      accounts: [],
+      snapshots: [],
+      currentCalendarYear: 2026,
+      pot: 'total',
+    })
+    expect(rows).toBeNull()
+  })
+
+  it('populates actuals only for past years, from real account snapshots', () => {
+    const rows = buildScheduledForecastYearRows({
+      checkpoint: { ...checkpoint, contributionChanges: [], plannedEvents: [] },
+      checkpointCreatedAt: '2026-01-01T00:00:00.000Z',
+      owner: 'total',
+      accounts: [{ id: 'acc-1', potCategory: 'investments', owner: 'joint' }],
+      snapshots: [
+        {
+          accountId: 'acc-1',
+          year: 2027,
+          recordedAt: '2027-06-01T00:00:00.000Z',
+          startBalance: 10_000,
+          endBalance: 16_000,
+          moneyIn: 6_000,
+          transferOut: null,
+        },
+      ],
+      currentCalendarYear: 2027,
+      pot: 'total',
+    })!
+    const past = rows.find((r) => r.calendarYear === 2027)!
+    expect(past.actualValue).toBe(16_000)
+    expect(past.actualAdditions).toBe(6_000)
+    const future = rows.find((r) => r.calendarYear === 2029)!
+    expect(future.actualValue).toBeNull()
+    expect(future.actualAdditions).toBeNull()
   })
 })

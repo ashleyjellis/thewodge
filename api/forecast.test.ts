@@ -3,8 +3,10 @@ import { createMigratedTestDb } from '../src/server/db/testHelpers'
 import { createHousehold } from '../src/server/db/households'
 import { createPerson } from '../src/server/db/people'
 import { createAccount } from '../src/server/db/accounts'
-import { insertForecastSnapshot } from '../src/server/db/forecastSnapshots'
+import { createContributionChange } from '../src/server/db/contributionChanges'
+import { insertForecastSnapshot, listForecastSnapshots } from '../src/server/db/forecastSnapshots'
 import type { Db } from '../src/server/db/client'
+import type { CheckpointState } from '../src/lib/checkpointState'
 import { handleForecast } from './forecast'
 import { fakeReq, fakeRes } from './_lib/testHttp'
 
@@ -160,6 +162,100 @@ describe('forecast API', () => {
     // strictly oldest-first
     const createdAts = (body() as { history: { createdAt: string }[] }).history.map((h) => h.createdAt)
     expect([...createdAts].sort()).toEqual(createdAts)
+  })
+})
+
+describe('a checkpoint freezes the live schedule (Phase 4)', () => {
+  let db: Db
+  let cleanup: () => void
+  let householdId: string
+
+  beforeAll(async () => {
+    ;({ db, cleanup } = await createMigratedTestDb())
+    householdId = (await createHousehold(db)).id
+    const personId = (await createPerson(db, { householdId, name: 'Sam', age: 36 })).id
+    await createAccount(db, {
+      householdId,
+      personId,
+      owner: 'person_a',
+      provider: 'Aviva',
+      accountType: 'stocks_isa',
+      monthlyContribution: 500,
+      openingBalance: 10_000,
+    })
+  })
+  afterAll(() => cleanup())
+
+  it('captures the live contribution schedule at save time', async () => {
+    await createContributionChange(db, {
+      householdId,
+      owner: 'person_a',
+      potCategory: 'investments',
+      effectiveYear: 2030,
+      changeType: 'set',
+      value: 900,
+    })
+
+    const { res, status, body } = fakeRes()
+    await handleForecast(
+      db,
+      fakeReq({ method: 'POST', body: { householdId, kind: 'checkpoint', label: 'first checkpoint' } }),
+      res,
+    )
+    expect(status()).toBe(201)
+    const checkpoint = (body() as { checkpoint: { householdStateJson: string } }).checkpoint
+    const state = JSON.parse(checkpoint.householdStateJson) as CheckpointState
+    expect(state.contributionChanges).toHaveLength(1)
+    expect(state.contributionChanges[0]).toMatchObject({
+      owner: 'person_a',
+      potCategory: 'investments',
+      effectiveYear: 2030,
+      changeType: 'set',
+      value: 900,
+    })
+    expect(state.plannedEvents).toEqual([])
+  })
+
+  it('a change made AFTER a checkpoint never retroactively appears in it, even re-read fresh from the DB', async () => {
+    const firstRes = fakeRes()
+    await handleForecast(
+      db,
+      fakeReq({ method: 'POST', body: { householdId, kind: 'checkpoint' } }),
+      firstRes.res,
+    )
+    const firstCheckpointId = (firstRes.body() as { checkpoint: { id: string } }).checkpoint.id
+
+    // a brand new live change, added after the checkpoint was saved
+    await createContributionChange(db, {
+      householdId,
+      owner: 'person_a',
+      potCategory: 'investments',
+      effectiveYear: 2031,
+      changeType: 'set',
+      value: 1_200,
+    })
+
+    // a second checkpoint, saved after the new change
+    const secondRes = fakeRes()
+    await handleForecast(
+      db,
+      fakeReq({ method: 'POST', body: { householdId, kind: 'checkpoint' } }),
+      secondRes.res,
+    )
+    const secondCheckpointId = (secondRes.body() as { checkpoint: { id: string } }).checkpoint.id
+
+    // re-fetch BOTH checkpoints fresh from the DB (not the cached POST
+    // responses) — proves the freeze is persisted, not just an in-memory artefact
+    const allSnapshots = await listForecastSnapshots(db, householdId)
+    const firstReread = JSON.parse(
+      allSnapshots.find((s) => s.id === firstCheckpointId)!.householdStateJson,
+    ) as CheckpointState
+    const secondReread = JSON.parse(
+      allSnapshots.find((s) => s.id === secondCheckpointId)!.householdStateJson,
+    ) as CheckpointState
+
+    expect(firstReread.contributionChanges.some((c) => c.value === 1_200)).toBe(false)
+    expect(secondReread.contributionChanges.some((c) => c.value === 1_200)).toBe(true)
   })
 })
 

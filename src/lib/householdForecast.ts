@@ -374,7 +374,7 @@ export type ActualSnapshotLike = {
  * totalGrowth()'s tolerance on the Growth tab (sum what's known, skip what
  * isn't) — the two tabs must agree on the same underlying data.
  */
-function actualPotYearMetrics(
+export function actualPotYearMetrics(
   accounts: { id: string; potCategory: PotCategory }[],
   snapshots: ActualSnapshotLike[],
   pot: PotFilter,

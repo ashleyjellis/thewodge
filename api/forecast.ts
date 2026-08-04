@@ -14,6 +14,8 @@ import { getDb, type Db } from '../src/server/db/client.js'
 import { getOrCreateHousehold } from '../src/server/db/households.js'
 import { listPeople } from '../src/server/db/people.js'
 import { listAccounts } from '../src/server/db/accounts.js'
+import { listContributionChanges } from '../src/server/db/contributionChanges.js'
+import { listPlannedEvents } from '../src/server/db/plannedEvents.js'
 import {
   createBaseline,
   createCheckpoint,
@@ -22,6 +24,7 @@ import {
   type ForecastSnapshot,
 } from '../src/server/db/forecastSnapshots.js'
 import { aggregateHouseholdState, canForecast, isValidFrozenState } from '../src/lib/householdForecast.js'
+import { buildCheckpointState } from '../src/lib/checkpointState.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -98,7 +101,25 @@ export async function handleForecast(db: Db, req: ApiRequest, res: ApiResponse):
 
       if (kind === 'checkpoint') {
         const label = typeof body.label === 'string' ? body.label : undefined
-        const checkpoint = await createCheckpoint(db, body.householdId, JSON.stringify(state), label)
+        // captures the LIVE schedule at save time, not just flat pot totals —
+        // see checkpointState.ts for why (growth/contribution variance later
+        // needs to replay what was actually scheduled, not a flat guess)
+        const [liveChanges, liveEvents] = await Promise.all([
+          listContributionChanges(db, body.householdId),
+          listPlannedEvents(db, body.householdId),
+        ])
+        const checkpointState = buildCheckpointState(
+          state,
+          liveChanges.map((c) => ({
+            owner: c.owner,
+            potCategory: c.potCategory,
+            effectiveYear: c.effectiveYear,
+            changeType: c.changeType,
+            value: c.value,
+          })),
+          liveEvents.map((e) => ({ owner: e.owner, potCategory: e.potCategory, year: e.year, amount: e.amount })),
+        )
+        const checkpoint = await createCheckpoint(db, body.householdId, JSON.stringify(checkpointState), label)
         res.status(201).json({ ok: true, checkpoint })
         return
       }

@@ -9,7 +9,17 @@
  */
 import { futureValueContributions, futureValueLump, monthlyRate } from './forecast.js'
 import type { AccountOwner } from './accountOwner.js'
-import { householdTargetAge, type OwnerFilter, type PotCategory } from './householdForecast.js'
+import {
+  accountsInPot,
+  actualPotYearMetrics,
+  actualTotalAsOf,
+  householdTargetAge,
+  type ActualSnapshotLike,
+  type ForecastYearRow,
+  type OwnerFilter,
+  type PotCategory,
+  type PotFilter,
+} from './householdForecast.js'
 
 const POT_CATEGORIES: readonly PotCategory[] = ['pension', 'investments', 'cash']
 
@@ -145,6 +155,12 @@ export type ScheduledPlanInput = {
   pots: Record<PotCategory, { balance: number; rate: number; baseMonthly: number }>
   changes: ContributionChange[]
   events: PlannedEvent[]
+  /** Optional per-pot, per-calendar-year rate override — e.g. a down-year
+   *  stress-test substituting a worse rate for a run of years (see
+   *  downYears.ts/planBand.ts). Omitting it entirely (or a pot/year having
+   *  no entry) is a no-op: that pot/year falls straight back to
+   *  pots[pot].rate, exactly today's existing behaviour. */
+  rateOverrides?: Partial<Record<PotCategory, Map<number, number>>>
 }
 
 function eventsFor(events: PlannedEvent[], pot: PotCategory, calendarYear: number): number {
@@ -226,7 +242,8 @@ export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYear
       const start = balances[pot]
       const monthly = schedules[pot].get(calendarYear) ?? 0
       const bonus = bonusSchedules[pot].get(calendarYear) ?? 0
-      const m = monthlyRate(input.pots[pot].rate)
+      const rateThisYear = input.rateOverrides?.[pot]?.get(calendarYear) ?? input.pots[pot].rate
+      const m = monthlyRate(rateThisYear)
       // a planned event lands at the start of its year, not the end — it must
       // change what that year's own growth compounds on, not just future
       // years' (see the scheduledPlan.test.ts case this fixed: a withdrawal
@@ -270,6 +287,22 @@ export function projectScheduledYearly(input: ScheduledPlanInput): ScheduledYear
   return points
 }
 
+/**
+ * The same definition as forecast.ts's findCrossoverYear (the first year
+ * the market adds more than you contribute that year), adapted for a
+ * scheduled projection — returns the calendar year rather than a relative
+ * one, since ScheduledYearPoint is calendar-anchored from the start. Skips
+ * points[0], the all-zero startYear seed point, same as findCrossoverYear
+ * skipping year 0.
+ */
+export function findScheduledCrossoverYear(points: ScheduledYearPoint[]): number | null {
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i]!
+    if (p.total.growth > p.total.contribution) return p.calendarYear
+  }
+  return null
+}
+
 export type ScheduledPlanAccount = {
   owner: AccountOwner
   potCategory: PotCategory
@@ -307,12 +340,12 @@ function resolveOwnerTargetAge(owner: OwnerFilter, anchorAge: number, people: Ag
 
 /**
  * Resolves live household + accounts + schedule state into one owner's
- * scheduled projection — the Plan table's data source. Unlike
- * aggregateHouseholdState, this reads current live data every time (no
- * frozen snapshot): the Plan table is a working "what if" view, not a
- * commitment record.
+ * ScheduledPlanInput — split out from buildScheduledPlan so a caller that
+ * needs the resolved input itself (e.g. planBand.ts, projecting it multiple
+ * times with different rateOverrides for a down-years stress test) doesn't
+ * have to re-derive it by hand.
  */
-export function buildScheduledPlan(params: {
+export function buildScheduledPlanInput(params: {
   owner: OwnerFilter
   startYear: number
   people: AgedPerson[]
@@ -320,7 +353,7 @@ export function buildScheduledPlan(params: {
   accounts: ScheduledPlanAccount[]
   changes: OwnerScopedContributionChange[]
   events: OwnerScopedPlannedEvent[]
-}): ScheduledYearPoint[] | null {
+}): ScheduledPlanInput | null {
   const age = resolveOwnerAge(params.owner, params.people)
   const targetAge = resolveOwnerTargetAge(params.owner, age ?? 0, params.people)
   if (age === null || targetAge === null) return null
@@ -344,7 +377,7 @@ export function buildScheduledPlan(params: {
     ]),
   ) as ScheduledPlanInput['pots']
 
-  return projectScheduledYearly({
+  return {
     startYear: params.startYear,
     age,
     targetAge,
@@ -356,6 +389,148 @@ export function buildScheduledPlan(params: {
       value: c.value,
     })),
     events: events.map((e) => ({ potCategory: e.potCategory, year: e.year, amount: e.amount })),
+  }
+}
+
+/**
+ * Resolves live household + accounts + schedule state into one owner's
+ * scheduled projection — the Plan table's data source. Unlike
+ * aggregateHouseholdState, this reads current live data every time (no
+ * frozen snapshot): the Plan table is a working "what if" view, not a
+ * commitment record.
+ */
+export function buildScheduledPlan(
+  params: Parameters<typeof buildScheduledPlanInput>[0],
+): ScheduledYearPoint[] | null {
+  const input = buildScheduledPlanInput(params)
+  return input ? projectScheduledYearly(input) : null
+}
+
+/** Picks one pot-filter slice out of a ScheduledYearPoint — the scheduled
+ *  engine's equivalent of householdForecast.ts's potPoint, kept separate
+ *  since ScheduledPotYearPoint carries an extra `events` field PotYearPoint
+ *  doesn't. */
+function scheduledPotPoint(point: ScheduledYearPoint, pot: PotFilter): ScheduledPotYearPoint {
+  if (pot === 'pension') return point.pension
+  if (pot === 'investments') return point.investments
+  if (pot === 'cash') return point.cash
+  if (pot === 'savingsAndInvestments') {
+    return {
+      startValue: point.investments.startValue + point.cash.startValue,
+      contribution: point.investments.contribution + point.cash.contribution,
+      events: point.investments.events + point.cash.events,
+      growth: point.investments.growth + point.cash.growth,
+      endValue: point.investments.endValue + point.cash.endValue,
+    }
+  }
+  return point.total
+}
+
+/**
+ * Builds the same ForecastYearRow shape buildForecastYearRows already
+ * produces (so ForecastYearTable needs zero changes to render it), but
+ * sourced from a checkpoint's frozen schedule instead of a flat baseline —
+ * the projection actually accounts for whatever contribution changes/
+ * planned events were live at checkpoint time, so growth-variance and
+ * contribution-variance compare against what was really scheduled, not a
+ * flat monthly guess. originalValue is always null: the faded "original
+ * baseline" concept belongs to the replan-fork model
+ * (buildForecastYearRows), a separate, still-available comparison — this is
+ * a different, complementary one. forecastAdditions is the recurring
+ * contribution schedule only (monthly + annual bonus), matching
+ * buildForecastYearRows' own definition of "additions" — a one-off planned
+ * event still moves forecastValue (it's inside endValue), it just isn't
+ * double-counted into this column, and could be negative (a withdrawal)
+ * which an "Additions" column has no good way to show anyway.
+ */
+export function buildScheduledForecastYearRows(params: {
+  /** a checkpoint's frozen state (FrozenForecastState + the schedule that
+   *  was live at save time) — structurally identical to
+   *  checkpointState.ts's CheckpointState, expressed here without
+   *  importing it directly to avoid a circular import: checkpointState.ts
+   *  imports the OwnerScoped contribution-change and planned-event types
+   *  from this file. */
+  checkpoint: {
+    investedRate: number
+    cashRate: number
+    total: { age: number; targetAge: number; pension: number; stocks: number; cash: number; monthly: number; pensionMonthly: number; cashMonthly: number }
+    personA: { age: number; targetAge: number; pension: number; stocks: number; cash: number; monthly: number; pensionMonthly: number; cashMonthly: number } | null
+    personB: { age: number; targetAge: number; pension: number; stocks: number; cash: number; monthly: number; pensionMonthly: number; cashMonthly: number } | null
+    joint: { age: number; targetAge: number; pension: number; stocks: number; cash: number; monthly: number; pensionMonthly: number; cashMonthly: number }
+    contributionChanges: OwnerScopedContributionChange[]
+    plannedEvents: OwnerScopedPlannedEvent[]
+  }
+  checkpointCreatedAt: string
+  owner: OwnerFilter
+  accounts: { id: string; potCategory: PotCategory; owner: AccountOwner }[]
+  snapshots: ActualSnapshotLike[]
+  currentCalendarYear: number
+  pot: PotFilter
+}): ForecastYearRow[] | null {
+  const totals =
+    params.owner === 'total'
+      ? params.checkpoint.total
+      : params.owner === 'person_a'
+        ? params.checkpoint.personA
+        : params.owner === 'person_b'
+          ? params.checkpoint.personB
+          : params.checkpoint.joint
+  if (!totals) return null
+
+  const startYear = new Date(params.checkpointCreatedAt).getUTCFullYear()
+  const rateFor = (pot: PotCategory) =>
+    pot === 'cash' ? params.checkpoint.cashRate : params.checkpoint.investedRate
+  const pots: ScheduledPlanInput['pots'] = {
+    pension: { balance: totals.pension, rate: rateFor('pension'), baseMonthly: totals.pensionMonthly },
+    investments: { balance: totals.stocks, rate: rateFor('investments'), baseMonthly: totals.monthly },
+    cash: { balance: totals.cash, rate: rateFor('cash'), baseMonthly: totals.cashMonthly },
+  }
+
+  const changes =
+    params.owner === 'total'
+      ? params.checkpoint.contributionChanges
+      : params.checkpoint.contributionChanges.filter((c) => c.owner === params.owner)
+  const events =
+    params.owner === 'total'
+      ? params.checkpoint.plannedEvents
+      : params.checkpoint.plannedEvents.filter((e) => e.owner === params.owner)
+
+  const points = projectScheduledYearly({
+    startYear,
+    age: totals.age,
+    targetAge: totals.targetAge,
+    pots,
+    changes: changes.map((c) => ({
+      potCategory: c.potCategory,
+      effectiveYear: c.effectiveYear,
+      changeType: c.changeType,
+      value: c.value,
+    })),
+    events: events.map((e) => ({ potCategory: e.potCategory, year: e.year, amount: e.amount })),
+  })
+
+  const ownerAccounts =
+    params.owner === 'total' ? params.accounts : params.accounts.filter((a) => a.owner === params.owner)
+  const potAccounts = accountsInPot(ownerAccounts, params.pot)
+
+  return points.map((point) => {
+    const scheduled = scheduledPotPoint(point, params.pot)
+    const isPast = point.calendarYear <= params.currentCalendarYear
+    const { additions: actualAdditions, growth: actualGrowth } = isPast
+      ? actualPotYearMetrics(ownerAccounts, params.snapshots, params.pot, point.calendarYear)
+      : { additions: null, growth: null }
+
+    return {
+      calendarYear: point.calendarYear,
+      age: point.age,
+      originalValue: null,
+      forecastValue: scheduled.endValue,
+      actualValue: isPast ? actualTotalAsOf(potAccounts, params.snapshots, point.calendarYear) : null,
+      forecastGrowth: scheduled.growth,
+      actualGrowth,
+      forecastAdditions: scheduled.contribution,
+      actualAdditions,
+    }
   })
 }
 
