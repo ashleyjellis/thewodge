@@ -36,6 +36,10 @@ export const households = sqliteTable('households', {
   realReturn: real('real_return').notNull().default(0.07),
   cashReturn: real('cash_return').notNull().default(0.045),
   swr: real('swr').notNull().default(0.04),
+  /** /app2: how many down-years to stress-test the plan against (planBand.ts) —
+   *  0 (default) collapses the low/high band to exactly the mid projection,
+   *  a feature that's off until explicitly opted into, not hidden */
+  downYearsCount: integer('down_years_count').notNull().default(0),
 })
 
 // ── people ────────────────────────────────────────────────────────────────

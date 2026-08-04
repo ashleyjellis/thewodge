@@ -11,7 +11,7 @@
  */
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { SITE_NAME } from '@/config'
+import { DOWN_YEAR_RATE, SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
@@ -19,7 +19,7 @@ import { useSnapshots } from '@/state/useSnapshots'
 import { useForecast } from '@/state/useForecast'
 import { useCheckpoints } from '@/state/useCheckpoints'
 import { usePlan } from '@/state/usePlan'
-import { postJson } from '@/lib/apiClient'
+import { patchJson, postJson } from '@/lib/apiClient'
 import { forecast, projectYearly, type YearPoint } from '@/lib/forecast'
 import {
   buildForecastYearRows,
@@ -30,9 +30,10 @@ import {
   type OwnerFilter,
   type PotFilter,
 } from '@/lib/householdForecast'
-import { buildScheduledForecastYearRows, buildScheduledPlan } from '@/lib/scheduledPlan'
+import { buildScheduledForecastYearRows, buildScheduledPlan, buildScheduledPlanInput } from '@/lib/scheduledPlan'
 import { checkpointSchedule } from '@/lib/checkpointState'
-import { money } from '@/lib/format'
+import { buildPlanBand } from '@/lib/planBand'
+import { money, percent } from '@/lib/format'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 import { ForecastYearTable } from '@/components/app/ForecastYearTable'
 import { PlanTable } from '@/components/app/PlanTable'
@@ -40,6 +41,8 @@ import { AppField } from '@/components/app/AppField'
 import { FilterPill } from '@/components/app/FilterPill'
 import { ScenariosTable } from '@/components/app/ScenariosTable'
 import { NavLink } from '@/components/NavLink'
+
+const DOWN_YEAR_OPTIONS = [0, 1, 2, 3, 5]
 
 const planSeo = seo({
   title: `Plan — ${SITE_NAME}`,
@@ -56,7 +59,13 @@ export const Route = createFileRoute('/app2/plan')({
 })
 
 function Plan() {
-  const { household, people, loading: householdLoading, error: householdError } = useHousehold()
+  const {
+    household,
+    people,
+    loading: householdLoading,
+    error: householdError,
+    refetch: refetchHousehold,
+  } = useHousehold()
   const { accounts, loading: accountsLoading } = useAccounts(household?.id ?? null)
   const { snapshots, loading: snapshotsLoading } = useSnapshots(household?.id ?? null)
   const {
@@ -88,6 +97,7 @@ function Plan() {
   const [savingCheckpoint, setSavingCheckpoint] = useState(false)
   const [checkpointError, setCheckpointError] = useState<string | null>(null)
   const [checkpointSaved, setCheckpointSaved] = useState(false)
+  const [savingDownYears, setSavingDownYears] = useState(false)
 
   const header = (
     <div>
@@ -220,6 +230,21 @@ function Plan() {
     events: plannedEvents,
   })
 
+  // the down-years stress test — same live schedule as the Plan table above,
+  // projected three ways (see planBand.ts). null only when this owner
+  // filter has no one to project for, same condition buildScheduledPlan
+  // itself returns null under.
+  const bandInput = buildScheduledPlanInput({
+    owner,
+    startYear: currentCalendarYear - 1,
+    people,
+    household,
+    accounts,
+    changes: contributionChanges,
+    events: plannedEvents,
+  })
+  const band = bandInput ? buildPlanBand(bandInput, household.downYearsCount) : null
+
   const submitReplan = async () => {
     setSaving(true)
     setError(null)
@@ -247,6 +272,16 @@ function Plan() {
       setCheckpointError(err instanceof Error ? err.message : 'failed to save checkpoint')
     } finally {
       setSavingCheckpoint(false)
+    }
+  }
+
+  const setDownYearsCount = async (n: number) => {
+    setSavingDownYears(true)
+    try {
+      await patchJson('/api/household', { id: household.id, downYearsCount: n })
+      await refetchHousehold()
+    } finally {
+      setSavingDownYears(false)
     }
   }
 
@@ -303,6 +338,58 @@ function Plan() {
           onAddPlannedEvent={addPlannedEvent}
           onRemovePlannedEvent={removePlannedEvent}
         />
+      ) : null}
+
+      {band ? (
+        <div className="rounded-3xl bg-card p-6 shadow-soft">
+          <h3 className="text-[15px] font-semibold tracking-tight">Down-years stress test</h3>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            How many down years should we test your plan against? A down year knocks pension and
+            investments by {percent(Math.abs(DOWN_YEAR_RATE))} instead of growing that year — cash
+            is never affected.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {DOWN_YEAR_OPTIONS.map((n) => (
+              <FilterPill key={n} active={household.downYearsCount === n} onClick={() => void setDownYearsCount(n)}>
+                {n === 0 ? 'Off' : `${n} year${n === 1 ? '' : 's'}`}
+              </FilterPill>
+            ))}
+            {savingDownYears ? <span className="self-center text-[12px] text-muted-foreground">Saving…</span> : null}
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl bg-accent/30 p-4">
+              <p className="text-[12px] text-muted-foreground">Low</p>
+              <p className="mt-1 text-[20px] font-semibold tabular-nums">
+                {money(band.low.points.at(-1)!.total.endValue)}
+              </p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                {band.lowStartYear ? `down years from ${band.lowStartYear}` : 'no down years applied'}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-accent/30 p-4">
+              <p className="text-[12px] text-muted-foreground">Mid</p>
+              <p className="mt-1 text-[20px] font-semibold tabular-nums">
+                {money(band.mid.points.at(-1)!.total.endValue)}
+              </p>
+              <p className="mt-1 text-[12px] text-muted-foreground">no down years applied</p>
+            </div>
+            <div className="rounded-2xl bg-accent/30 p-4">
+              <p className="text-[12px] text-muted-foreground">High</p>
+              <p className="mt-1 text-[20px] font-semibold tabular-nums">
+                {money(band.high.points.at(-1)!.total.endValue)}
+              </p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                {band.highStartYear ? `down years from ${band.highStartYear}` : 'no down years applied'}
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">
+            Low and High are the SAME down years, just placed at the worst and best possible moment
+            in your plan — not "no bad years happen" versus "some do." A real down-run can only ever
+            cost you something, so High still sits below Mid.
+          </p>
+        </div>
       ) : null}
 
       <div>

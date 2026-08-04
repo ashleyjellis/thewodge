@@ -70,6 +70,22 @@ describe('PATCH /api/household', () => {
     expect(h.targetIncomeToday).toBe(65_000)
     expect(h.realReturn).toBe(0.07) // untouched
   })
+
+  it('defaults downYearsCount to 0, and accepts an update, clamped to a non-negative integer', async () => {
+    const getRes = fakeRes()
+    await handleHousehold(db, fakeReq({ method: 'GET' }), getRes.res)
+    const { id, downYearsCount } = (getRes.body() as { household: { id: string; downYearsCount: number } })
+      .household
+    expect(downYearsCount).toBe(0)
+
+    const patchRes = fakeRes()
+    await handleHousehold(db, fakeReq({ method: 'PATCH', body: { id, downYearsCount: -3.7 } }), patchRes.res)
+    expect(patchRes.status()).toBe(200)
+
+    const reGet = fakeRes()
+    await handleHousehold(db, fakeReq({ method: 'GET' }), reGet.res)
+    expect((reGet.body() as { household: { downYearsCount: number } }).household.downYearsCount).toBe(0)
+  })
 })
 
 describe('unsupported methods', () => {

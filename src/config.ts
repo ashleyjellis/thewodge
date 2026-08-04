@@ -27,6 +27,18 @@ export const CASH_RATE = 0.045
 export const TARGET_AGE = 60
 
 /**
+ * The down-years band's stress magnitude (planBand.ts/downYears.ts): a
+ * named, openly-stated constant for v1 rather than a per-household editable
+ * assumption — the household chooses HOW MANY down years to stress-test
+ * for (households.downYearsCount), not how severe each one is. Roughly a
+ * "genuinely bad year" for equities (2008 was worse, 2022 was milder) —
+ * illustrative, not a historical model. Flagged as a fast-follow to make
+ * this editable too. Applies to pension + investments only, never cash
+ * (matches the "down-market" framing).
+ */
+export const DOWN_YEAR_RATE = -0.2
+
+/**
  * Default assumed pension contribution split, used ONLY when someone gives an
  * income but no monthly pension contribution — a common employer-match shape, not
  * a recommendation. Always surfaced explicitly wherever it's applied; never silent.

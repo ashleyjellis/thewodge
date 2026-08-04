@@ -17,6 +17,8 @@ export type Household = {
   realReturn: number
   cashReturn: number
   swr: number
+  /** /app2: how many down-years to stress-test the plan against — 0 = off (planBand.ts) */
+  downYearsCount: number
 }
 
 export type HouseholdPerson = {

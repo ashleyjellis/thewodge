@@ -1,0 +1,1 @@
+ALTER TABLE `households` ADD `down_years_count` integer DEFAULT 0 NOT NULL;

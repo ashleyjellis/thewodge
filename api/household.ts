@@ -42,6 +42,7 @@ export async function handleHousehold(
       if (typeof body.realReturn === 'number') patch.realReturn = body.realReturn
       if (typeof body.cashReturn === 'number') patch.cashReturn = body.cashReturn
       if (typeof body.swr === 'number') patch.swr = body.swr
+      if (typeof body.downYearsCount === 'number') patch.downYearsCount = Math.max(0, Math.round(body.downYearsCount))
 
       await updateHousehold(db, body.id, patch)
       res.status(200).json({ ok: true })

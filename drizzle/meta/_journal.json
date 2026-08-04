@@ -43,6 +43,13 @@
       "when": 1785824630179,
       "tag": "0005_gorgeous_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785827138527,
+      "tag": "0006_gorgeous_black_tarantula",
+      "breakpoints": true
     }
   ]
 }
