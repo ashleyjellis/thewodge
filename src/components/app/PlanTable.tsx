@@ -23,6 +23,7 @@ import { FilterPill } from './FilterPill'
 import { AddPlannedEventModal } from './AddPlannedEventModal'
 import { ContributionBreakdown } from './ContributionBreakdown'
 import { EditContributionModal } from './EditContributionModal'
+import { LifeEventPicker } from './LifeEventPicker'
 import type { ContributionChange, PlannedEvent } from '@/state/usePlan'
 
 const POT_FILTERS: { value: PotFilter; label: string }[] = [
@@ -70,7 +71,7 @@ export function PlanTable({
   points: ScheduledYearPoint[]
   pot: PotFilter
   onPotChange: (pot: PotFilter) => void
-  people: { id: string; name: string }[]
+  people: { id: string; name: string; salary: number | null }[]
   accounts: ScheduledPlanAccount[]
   defaultOwner: AccountOwner
   investedRate: number
@@ -83,6 +84,7 @@ export function PlanTable({
     effectiveYear: number
     changeType: ContributionChangeType
     value: number
+    note?: string
   }) => Promise<void>
   onAddPlannedEvent: (input: {
     owner: AccountOwner
@@ -99,6 +101,7 @@ export function PlanTable({
     null,
   )
   const [addingEventYear, setAddingEventYear] = useState<number | null>(null)
+  const [fallbackEventYear, setFallbackEventYear] = useState<number | null>(null)
 
   const columns = points.slice(1, 1 + horizon)
   if (columns.length === 0) return null
@@ -318,14 +321,30 @@ export function PlanTable({
       ) : null}
 
       {addingEventYear !== null ? (
+        <LifeEventPicker
+          people={people}
+          accounts={accounts}
+          contributionChanges={contributionChanges}
+          years={columns.map((c) => c.calendarYear)}
+          defaultYear={addingEventYear}
+          onAddContributionChange={onAddContributionChange}
+          onSomethingElse={() => {
+            setFallbackEventYear(addingEventYear)
+            setAddingEventYear(null)
+          }}
+          onClose={() => setAddingEventYear(null)}
+        />
+      ) : null}
+
+      {fallbackEventYear !== null ? (
         <AddPlannedEventModal
           people={people}
           years={columns.map((c) => c.calendarYear)}
           defaultOwner={defaultOwner}
           defaultPotCategory={pot === 'total' || pot === 'savingsAndInvestments' ? 'investments' : pot}
-          defaultYear={addingEventYear}
+          defaultYear={fallbackEventYear}
           onSave={onAddPlannedEvent}
-          onClose={() => setAddingEventYear(null)}
+          onClose={() => setFallbackEventYear(null)}
         />
       ) : null}
     </div>
