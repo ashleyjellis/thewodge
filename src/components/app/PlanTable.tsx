@@ -327,7 +327,9 @@ export function PlanTable({
           contributionChanges={contributionChanges}
           years={columns.map((c) => c.calendarYear)}
           defaultYear={addingEventYear}
+          defaultOwner={defaultOwner}
           onAddContributionChange={onAddContributionChange}
+          onAddPlannedEvent={onAddPlannedEvent}
           onSomethingElse={() => {
             setFallbackEventYear(addingEventYear)
             setAddingEventYear(null)

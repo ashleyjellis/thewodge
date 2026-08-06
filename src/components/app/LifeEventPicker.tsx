@@ -1,9 +1,9 @@
 /**
  * Replaces the Plan table's "+ Add" going straight to the generic planned-
  * event form — now it asks what's actually changing first. Maternity/
- * paternity leave gets its own typed compiler (statutory pay, a drop/
- * restore pair); "Something else" is the existing generic form, unchanged,
- * kept as the escape hatch for anything not modelled yet (a car, a student
+ * paternity leave, house move, and new child each get their own typed
+ * compiler; "Something else" is the existing generic form, unchanged, kept
+ * as the escape hatch for anything not modelled yet (a car, a student
  * loan, ...).
  */
 import { useState } from 'react'
@@ -12,14 +12,27 @@ import type { PotCategory } from '@/lib/householdForecast'
 import type { OwnerScopedContributionChange, ScheduledPlanAccount } from '@/lib/scheduledPlan'
 import { Modal } from './Modal'
 import { MaternityLeaveForm } from './MaternityLeaveForm'
+import { HouseMoveForm } from './HouseMoveForm'
+import { NewChildForm } from './NewChildForm'
 
-type Step = { kind: 'pick' } | { kind: 'maternity_paternity_leave' }
+type Kind = 'maternity_paternity_leave' | 'house_move' | 'new_child'
+type Step = { kind: 'pick' } | { kind: Kind }
 
-const KIND_OPTIONS: { kind: Step['kind']; label: string; hint: string }[] = [
+const KIND_OPTIONS: { kind: Kind; label: string; hint: string }[] = [
   {
     kind: 'maternity_paternity_leave',
     label: 'Maternity or paternity leave',
     hint: 'Reduced pay for a stretch, worked out from statutory pay',
+  },
+  {
+    kind: 'house_move',
+    label: 'House move',
+    hint: 'A one-off moving cost, and a possible change to ongoing saving',
+  },
+  {
+    kind: 'new_child',
+    label: 'New child',
+    hint: 'Reduced saving for added costs, for as long as you choose',
   },
 ]
 
@@ -29,7 +42,9 @@ export function LifeEventPicker({
   contributionChanges,
   years,
   defaultYear,
+  defaultOwner,
   onAddContributionChange,
+  onAddPlannedEvent,
   onSomethingElse,
   onClose,
 }: {
@@ -38,12 +53,21 @@ export function LifeEventPicker({
   contributionChanges: OwnerScopedContributionChange[]
   years: number[]
   defaultYear: number
+  defaultOwner: AccountOwner
   onAddContributionChange: (input: {
     owner: AccountOwner
     potCategory: PotCategory
     effectiveYear: number
     changeType: 'set' | 'grow_pct' | 'annual_bonus'
     value: number
+    note?: string
+  }) => Promise<void>
+  onAddPlannedEvent: (input: {
+    owner: AccountOwner
+    potCategory: PotCategory
+    year: number
+    name: string
+    amount: number
     note?: string
   }) => Promise<void>
   onSomethingElse: () => void
@@ -59,6 +83,39 @@ export function LifeEventPicker({
         contributionChanges={contributionChanges}
         years={years}
         defaultYear={defaultYear}
+        onAddContributionChange={onAddContributionChange}
+        onBack={() => setStep({ kind: 'pick' })}
+        onClose={onClose}
+      />
+    )
+  }
+
+  if (step.kind === 'house_move') {
+    return (
+      <HouseMoveForm
+        people={people}
+        accounts={accounts}
+        contributionChanges={contributionChanges}
+        years={years}
+        defaultYear={defaultYear}
+        defaultOwner={defaultOwner}
+        onAddContributionChange={onAddContributionChange}
+        onAddPlannedEvent={onAddPlannedEvent}
+        onBack={() => setStep({ kind: 'pick' })}
+        onClose={onClose}
+      />
+    )
+  }
+
+  if (step.kind === 'new_child') {
+    return (
+      <NewChildForm
+        people={people}
+        accounts={accounts}
+        contributionChanges={contributionChanges}
+        years={years}
+        defaultYear={defaultYear}
+        defaultOwner={defaultOwner}
         onAddContributionChange={onAddContributionChange}
         onBack={() => setStep({ kind: 'pick' })}
         onClose={onClose}
