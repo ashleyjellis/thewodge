@@ -2,7 +2,7 @@
  * Accounts — the ledger, the full plan history timeline, and the merged
  * financial diary.
  */
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
 import { useHousehold } from '@/state/useHousehold'
@@ -31,6 +31,9 @@ export const Route = createFileRoute('/app2/accounts')({
 })
 
 function Accounts() {
+  const navigate = useNavigate()
+  const markChanged = () => void navigate({ to: '/app2/today', search: { justChanged: 'yes' } })
+
   const { household, people } = useHousehold()
   const { accounts } = useAccounts(household?.id ?? null)
   const { snapshots } = useSnapshots(household?.id ?? null)
@@ -48,7 +51,7 @@ function Accounts() {
 
   return (
     <div className="space-y-10">
-      <AccountsSetup />
+      <AccountsSetup onSalaryChanged={markChanged} />
       <CheckpointTimeline history={history} />
       <DiaryParseInput
         people={people}
@@ -56,6 +59,7 @@ function Accounts() {
         contributionChanges={contributionChanges}
         onAddContributionChange={addContributionChange}
         onAddPlannedEvent={addPlannedEvent}
+        onLifeEventConfirmed={markChanged}
       />
       <FinancialDiary entries={diaryEntries} accounts={accounts} people={people} />
     </div>

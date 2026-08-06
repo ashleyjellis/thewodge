@@ -31,6 +31,7 @@ export function DiaryParseInput({
   contributionChanges,
   onAddContributionChange,
   onAddPlannedEvent,
+  onLifeEventConfirmed,
 }: {
   people: { id: string; name: string; salary: number | null }[]
   accounts: ScheduledPlanAccount[]
@@ -51,6 +52,10 @@ export function DiaryParseInput({
     amount: number
     note?: string
   }) => Promise<void>
+  /** fired whenever a life event actually lands, via any of the three
+   *  paths below (a direct parse match, a typed form via the picker, or
+   *  the picker's "something else" fallback) — never on a plain cancel */
+  onLifeEventConfirmed?: () => void
 }) {
   const [text, setText] = useState('')
   const [step, setStep] = useState<Step>({ kind: 'idle' })
@@ -104,6 +109,7 @@ export function DiaryParseInput({
               for (const event of step.plan.plannedEvents) {
                 await onAddPlannedEvent({ ...event })
               }
+              onLifeEventConfirmed?.()
               closeAll()
             }}
           />
@@ -118,8 +124,14 @@ export function DiaryParseInput({
           years={years}
           defaultYear={currentYear}
           defaultOwner="joint"
-          onAddContributionChange={onAddContributionChange}
-          onAddPlannedEvent={onAddPlannedEvent}
+          onAddContributionChange={async (input) => {
+            await onAddContributionChange(input)
+            onLifeEventConfirmed?.()
+          }}
+          onAddPlannedEvent={async (input) => {
+            await onAddPlannedEvent(input)
+            onLifeEventConfirmed?.()
+          }}
           onSomethingElse={() => setStep({ kind: 'fallback' })}
           onClose={closeAll}
         />
@@ -132,7 +144,10 @@ export function DiaryParseInput({
           defaultOwner="joint"
           defaultPotCategory="investments"
           defaultYear={currentYear}
-          onSave={onAddPlannedEvent}
+          onSave={async (input) => {
+            await onAddPlannedEvent(input)
+            onLifeEventConfirmed?.()
+          }}
           onClose={closeAll}
         />
       ) : null}

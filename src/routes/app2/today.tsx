@@ -1,14 +1,28 @@
 /**
- * Today — the check-in screen, currently the Dashboard's own content
- * (DashboardBody) plus the Today-if sandbox. Gains its own bespoke
- * behaviours — the ambient crossover subtitle, movement moments,
- * down-market reassurance — in later phases.
+ * Today — the check-in screen. DashboardBody stays the shared, unchanged
+ * glance (still reused by /app's own Dashboard tab); this file layers
+ * Today's own bespoke behaviours on top of it: an ambient crossover
+ * subtitle, a one-time full-screen moment on a genuine movement event, and
+ * down-market reassurance in place of the ambient line when a real dip
+ * still clears the down-years band's Low case (todayState.ts).
  */
-import { createFileRoute } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
+import { useHousehold } from '@/state/useHousehold'
+import { useAccounts } from '@/state/useAccounts'
+import { useSnapshots } from '@/state/useSnapshots'
+import { usePlan } from '@/state/usePlan'
+import { actualTotalAsOf } from '@/lib/householdForecast'
+import { buildPlanBand } from '@/lib/planBand'
+import { buildScheduledPlanInput } from '@/lib/scheduledPlan'
+import { resolveTodayState } from '@/lib/todayState'
 import { DashboardBody } from '@/components/app/DashboardBody'
 import { TodayIfSandbox } from '@/components/app/TodayIfSandbox'
+import { CrossoverAmbient } from '@/components/app/CrossoverAmbient'
+import { CrossoverFullScreenMoment } from '@/components/app/CrossoverFullScreenMoment'
+import { DownMarketReassurance } from '@/components/app/DownMarketReassurance'
 
 const todaySeo = seo({
   title: `Today — ${SITE_NAME}`,
@@ -17,6 +31,9 @@ const todaySeo = seo({
 })
 
 export const Route = createFileRoute('/app2/today')({
+  validateSearch: (search: Record<string, unknown>): { justChanged?: string } => ({
+    justChanged: typeof search.justChanged === 'string' ? search.justChanged : undefined,
+  }),
   head: () => ({
     links: todaySeo.links,
     meta: [...todaySeo.meta, { name: 'robots', content: 'noindex' }],
@@ -25,9 +42,72 @@ export const Route = createFileRoute('/app2/today')({
 })
 
 function Today() {
+  const { justChanged } = Route.useSearch()
+  const navigate = useNavigate()
+  // captured once at mount, before the URL param below is stripped — the
+  // param itself is consumed exactly once, never persisted, but this local
+  // flag keeps the moment showing until the user dismisses it
+  const [showMoment, setShowMoment] = useState(() => Boolean(justChanged))
+
+  useEffect(() => {
+    if (justChanged) {
+      void navigate({ to: '/app2/today', replace: true })
+    }
+    // run once on mount only — deliberately not reacting to justChanged
+    // again after this, since re-navigating already clears it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { household, people } = useHousehold()
+  const { accounts } = useAccounts(household?.id ?? null)
+  const { snapshots } = useSnapshots(household?.id ?? null)
+  const { contributionChanges, plannedEvents } = usePlan(household?.id ?? null)
+
+  const currentCalendarYear = new Date().getUTCFullYear()
+  const bandInput = household
+    ? buildScheduledPlanInput({
+        owner: 'total',
+        startYear: currentCalendarYear - 1,
+        people,
+        household,
+        accounts,
+        changes: contributionChanges,
+        events: plannedEvents,
+      })
+    : null
+  const band = bandInput && household ? buildPlanBand(bandInput, household.downYearsCount) : null
+  const crossoverYear = band?.mid.crossoverYear ?? null
+
+  const midAtNow = band?.mid.points.find((p) => p.calendarYear === currentCalendarYear) ?? null
+  const lowAtNow = band?.low.points.find((p) => p.calendarYear === currentCalendarYear) ?? null
+  const comparison =
+    snapshots.length > 0 && midAtNow && lowAtNow
+      ? {
+          actualValue: actualTotalAsOf(accounts, snapshots, currentCalendarYear),
+          midValue: midAtNow.total.endValue,
+          lowValue: lowAtNow.total.endValue,
+        }
+      : null
+
+  const todayState = resolveTodayState({ justChanged: showMoment, crossoverYear, comparison })
+
   return (
     <div className="space-y-10">
+      {todayState.kind === 'full_screen_moment' ? (
+        <CrossoverFullScreenMoment
+          crossoverYear={todayState.crossoverYear}
+          onDismiss={() => setShowMoment(false)}
+        />
+      ) : null}
+
       <DashboardBody accountsPath="/app2/accounts" />
+
+      {todayState.kind === 'down_market_reassurance' ? (
+        <DownMarketReassurance crossoverYear={todayState.crossoverYear} />
+      ) : (
+        <CrossoverAmbient crossoverYear={todayState.crossoverYear} />
+      )}
+
       <TodayIfSandbox />
     </div>
   )

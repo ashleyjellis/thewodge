@@ -24,7 +24,7 @@ const POT_LABELS: Record<'pension' | 'investments' | 'cash', string> = {
   cash: 'Cash',
 }
 
-export function AccountsSetup() {
+export function AccountsSetup({ onSalaryChanged }: { onSalaryChanged?: () => void } = {}) {
   const {
     household,
     people,
@@ -78,6 +78,7 @@ export function AccountsSetup() {
   const saveSalaryChange = async (personId: string, input: { effectiveYear: number; salary: number }) => {
     await postJson('/api/salaryChanges', { personId, ...input })
     await refetchSalaryChanges()
+    onSalaryChanged?.()
   }
 
   const saveAccount = async (payload: AccountFormPayload) => {

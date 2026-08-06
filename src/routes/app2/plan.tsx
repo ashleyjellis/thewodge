@@ -10,7 +10,7 @@
  * changing, so both pages get it for free.
  */
 import { useEffect, useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { DOWN_YEAR_RATE, SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
 import { useHousehold } from '@/state/useHousehold'
@@ -61,6 +61,7 @@ export const Route = createFileRoute('/app2/plan')({
 })
 
 function Plan() {
+  const navigate = useNavigate()
   const {
     household,
     people,
@@ -435,6 +436,7 @@ function Plan() {
           onAddContributionChange={addContributionChange}
           onAddPlannedEvent={addPlannedEvent}
           onRemovePlannedEvent={removePlannedEvent}
+          onLifeEventConfirmed={() => void navigate({ to: '/app2/today', search: { justChanged: 'yes' } })}
         />
       ) : null}
 

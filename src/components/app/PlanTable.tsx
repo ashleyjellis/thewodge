@@ -66,6 +66,7 @@ export function PlanTable({
   onAddContributionChange,
   onAddPlannedEvent,
   onRemovePlannedEvent,
+  onLifeEventConfirmed,
 }: {
   /** the live projection, year 0 = today's snapshot, year 1 = this calendar year onward */
   points: ScheduledYearPoint[]
@@ -94,6 +95,10 @@ export function PlanTable({
     amount: number
   }) => Promise<void>
   onRemovePlannedEvent: (id: string) => Promise<void>
+  /** fired only when a life event (typed or "something else") actually
+   *  lands — never for routine contribution edits made elsewhere in this
+   *  table (the Contributions breakdown, "grow instead") */
+  onLifeEventConfirmed?: () => void
 }) {
   const [horizon, setHorizon] = useState<5 | 10>(10)
   const [breakdownYear, setBreakdownYear] = useState<number | null>(null)
@@ -328,8 +333,14 @@ export function PlanTable({
           years={columns.map((c) => c.calendarYear)}
           defaultYear={addingEventYear}
           defaultOwner={defaultOwner}
-          onAddContributionChange={onAddContributionChange}
-          onAddPlannedEvent={onAddPlannedEvent}
+          onAddContributionChange={async (input) => {
+            await onAddContributionChange(input)
+            onLifeEventConfirmed?.()
+          }}
+          onAddPlannedEvent={async (input) => {
+            await onAddPlannedEvent(input)
+            onLifeEventConfirmed?.()
+          }}
           onSomethingElse={() => {
             setFallbackEventYear(addingEventYear)
             setAddingEventYear(null)
@@ -345,7 +356,10 @@ export function PlanTable({
           defaultOwner={defaultOwner}
           defaultPotCategory={pot === 'total' || pot === 'savingsAndInvestments' ? 'investments' : pot}
           defaultYear={fallbackEventYear}
-          onSave={onAddPlannedEvent}
+          onSave={async (input) => {
+            await onAddPlannedEvent(input)
+            onLifeEventConfirmed?.()
+          }}
           onClose={() => setFallbackEventYear(null)}
         />
       ) : null}
