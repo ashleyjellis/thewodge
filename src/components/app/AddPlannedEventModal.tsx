@@ -37,6 +37,7 @@ export function AddPlannedEventModal({
     year: number
     name: string
     amount: number
+    note?: string
   }) => Promise<void>
   onClose: () => void
 }) {
@@ -52,6 +53,7 @@ export function AddPlannedEventModal({
   const [name, setName] = useState('')
   const [direction, setDirection] = useState<'in' | 'out'>('in')
   const [amount, setAmount] = useState('')
+  const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,6 +69,7 @@ export function AddPlannedEventModal({
         year: Number(year),
         name: name.trim(),
         amount: direction === 'in' ? parsed : -parsed,
+        ...(note.trim() ? { note: note.trim() } : {}),
       })
       onClose()
     } catch (err) {
@@ -109,6 +112,13 @@ export function AddPlannedEventModal({
           Money out
         </FilterPill>
       </div>
+      <AppField
+        label="Note (optional)"
+        value={note}
+        onChange={setNote}
+        placeholder="what this is for"
+        className="mt-3"
+      />
       {error ? <p className="mt-3 text-[13px] text-muted-foreground">{error}</p> : null}
       <div className="mt-5 flex gap-2">
         <button

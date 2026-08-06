@@ -45,6 +45,7 @@ export function EditContributionModal({
     effectiveYear: number
     changeType: ContributionChangeType
     value: number
+    note?: string
   }) => Promise<void>
   onClose: () => void
 }) {
@@ -62,6 +63,7 @@ export function EditContributionModal({
     defaultChangeType === 'annual_bonus' ? 'set' : defaultChangeType,
   )
   const [value, setValue] = useState('')
+  const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
 
   const submit = async () => {
@@ -75,6 +77,7 @@ export function EditContributionModal({
         effectiveYear: Number(effectiveYear),
         changeType,
         value: changeType === 'grow_pct' ? parsed / 100 : parsed,
+        ...(note.trim() ? { note: note.trim() } : {}),
       })
       onClose()
     } finally {
@@ -148,6 +151,13 @@ export function EditContributionModal({
           ? `From ${effectiveYear}, this pot's monthly contribution becomes the amount above, until you change it again.`
           : `From ${effectiveYear}, this pot's monthly contribution grows by that percentage every year, until you change it again.`}
       </p>
+      <AppField
+        label="Note (optional)"
+        value={note}
+        onChange={setNote}
+        placeholder="why this changed"
+        className="mt-3"
+      />
       <div className="mt-5 flex gap-2">
         <button
           type="button"
