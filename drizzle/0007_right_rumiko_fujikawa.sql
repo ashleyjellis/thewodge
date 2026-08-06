@@ -1,0 +1,1 @@
+ALTER TABLE `households` ADD `stop_work_age` integer;

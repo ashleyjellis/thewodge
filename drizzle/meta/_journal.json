@@ -50,6 +50,13 @@
       "when": 1785827138527,
       "tag": "0006_gorgeous_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1786022954831,
+      "tag": "0007_right_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

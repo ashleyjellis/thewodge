@@ -19,6 +19,8 @@ export type Household = {
   swr: number
   /** /app2: how many down-years to stress-test the plan against — 0 = off (planBand.ts) */
   downYearsCount: number
+  /** /app2: age someone plans to stop paid work — null until set (bridgeCheck.ts) */
+  stopWorkAge: number | null
 }
 
 export type HouseholdPerson = {

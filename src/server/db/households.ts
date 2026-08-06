@@ -11,7 +11,10 @@ import { households } from './schema.js'
 export type Household = typeof households.$inferSelect
 
 export type HouseholdPatch = Partial<
-  Pick<Household, 'retirementAge' | 'targetIncomeToday' | 'realReturn' | 'cashReturn' | 'swr' | 'downYearsCount'>
+  Pick<
+    Household,
+    'retirementAge' | 'targetIncomeToday' | 'realReturn' | 'cashReturn' | 'swr' | 'downYearsCount' | 'stopWorkAge'
+  >
 >
 
 export async function getHousehold(db: Db): Promise<Household | null> {
@@ -31,6 +34,7 @@ export async function createHousehold(db: Db, input: HouseholdPatch = {}): Promi
     cashReturn: input.cashReturn ?? 0.045,
     swr: input.swr ?? 0.04,
     downYearsCount: input.downYearsCount ?? 0,
+    stopWorkAge: input.stopWorkAge ?? null,
   }
   await db.insert(households).values(row)
   return row

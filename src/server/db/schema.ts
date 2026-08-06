@@ -40,6 +40,13 @@ export const households = sqliteTable('households', {
    *  0 (default) collapses the low/high band to exactly the mid projection,
    *  a feature that's off until explicitly opted into, not hidden */
   downYearsCount: integer('down_years_count').notNull().default(0),
+  /** /app2: age someone plans to stop paid work — nullable until set; pairs
+   *  with targetIncomeToday/swr for the bridge-to-pension-access adequacy
+   *  check (bridgeCheck.ts). Household-level rather than per-person: it
+   *  pairs with two already-household-level fields, and per-person framing
+   *  raises an ambiguity (whose stop-work age, for a household?) this
+   *  feature doesn't resolve. */
+  stopWorkAge: integer('stop_work_age'),
 })
 
 // ── people ────────────────────────────────────────────────────────────────

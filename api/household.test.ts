@@ -86,6 +86,22 @@ describe('PATCH /api/household', () => {
     await handleHousehold(db, fakeReq({ method: 'GET' }), reGet.res)
     expect((reGet.body() as { household: { downYearsCount: number } }).household.downYearsCount).toBe(0)
   })
+
+  it('stopWorkAge defaults to null, and accepts an update, clamped to a non-negative integer', async () => {
+    const getRes = fakeRes()
+    await handleHousehold(db, fakeReq({ method: 'GET' }), getRes.res)
+    const { id, stopWorkAge } = (getRes.body() as { household: { id: string; stopWorkAge: number | null } })
+      .household
+    expect(stopWorkAge).toBeNull()
+
+    const patchRes = fakeRes()
+    await handleHousehold(db, fakeReq({ method: 'PATCH', body: { id, stopWorkAge: 55.6 } }), patchRes.res)
+    expect(patchRes.status()).toBe(200)
+
+    const reGet = fakeRes()
+    await handleHousehold(db, fakeReq({ method: 'GET' }), reGet.res)
+    expect((reGet.body() as { household: { stopWorkAge: number } }).household.stopWorkAge).toBe(56)
+  })
 })
 
 describe('unsupported methods', () => {

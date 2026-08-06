@@ -9,7 +9,7 @@
  * almost immediately. ScenariosTable was extracted because it *isn't*
  * changing, so both pages get it for free.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { DOWN_YEAR_RATE, SITE_NAME } from '@/config'
 import { seo } from '@/lib/seo'
@@ -32,7 +32,8 @@ import {
 } from '@/lib/householdForecast'
 import { buildScheduledForecastYearRows, buildScheduledPlan, buildScheduledPlanInput } from '@/lib/scheduledPlan'
 import { checkpointSchedule } from '@/lib/checkpointState'
-import { buildPlanBand, orderedBandRange } from '@/lib/planBand'
+import { buildPlanBand, investmentsValueAtAge, orderedBandRange } from '@/lib/planBand'
+import { checkBridge } from '@/lib/bridgeCheck'
 import { money, percent } from '@/lib/format'
 import { BandChart, type BandPoint } from '@/components/BandChart'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
@@ -99,6 +100,23 @@ function Plan() {
   const [checkpointError, setCheckpointError] = useState<string | null>(null)
   const [checkpointSaved, setCheckpointSaved] = useState(false)
   const [savingDownYears, setSavingDownYears] = useState(false)
+  const [targetIncomeInput, setTargetIncomeInput] = useState('')
+  const [swrInput, setSwrInput] = useState('')
+  const [stopWorkAgeInput, setStopWorkAgeInput] = useState('')
+  const [savingBridge, setSavingBridge] = useState(false)
+  const [bridgeError, setBridgeError] = useState<string | null>(null)
+
+  // household loads asynchronously (starts null), so these can't be plain
+  // useState initializers — those only run once, on the very first (null)
+  // render, and would never pick up the real values once the fetch lands.
+  // Re-syncs whenever the underlying fields actually change: on first load,
+  // and after a successful save below re-fetches the household.
+  useEffect(() => {
+    if (!household) return
+    setTargetIncomeInput(household.targetIncomeToday !== null ? String(household.targetIncomeToday) : '')
+    setSwrInput(String(Math.round(household.swr * 1000) / 10))
+    setStopWorkAgeInput(household.stopWorkAge !== null ? String(household.stopWorkAge) : '')
+  }, [household?.targetIncomeToday, household?.swr, household?.stopWorkAge])
 
   const header = (
     <div>
@@ -276,6 +294,31 @@ function Plan() {
     return { ...row, lowValue: ordered?.low ?? null, highValue: ordered?.high ?? null }
   })
 
+  // the bridge check — does the investments pot alone, at stop-work age,
+  // cover the target income until pension access (bridgeCheck.ts). Reuses
+  // the same band, so it degrades exactly like the down-years card above
+  // when there's no one for this owner filter to project for.
+  const bridgeReady = household.targetIncomeToday !== null && household.stopWorkAge !== null && band !== null
+  const bridgeResults = bridgeReady
+    ? {
+        low: checkBridge({
+          investmentsValue: investmentsValueAtAge(band!.low.points, household.stopWorkAge!),
+          targetIncomeToday: household.targetIncomeToday!,
+          swr: household.swr,
+        }),
+        mid: checkBridge({
+          investmentsValue: investmentsValueAtAge(band!.mid.points, household.stopWorkAge!),
+          targetIncomeToday: household.targetIncomeToday!,
+          swr: household.swr,
+        }),
+        high: checkBridge({
+          investmentsValue: investmentsValueAtAge(band!.high.points, household.stopWorkAge!),
+          targetIncomeToday: household.targetIncomeToday!,
+          swr: household.swr,
+        }),
+      }
+    : null
+
   const submitReplan = async () => {
     setSaving(true)
     setError(null)
@@ -313,6 +356,30 @@ function Plan() {
       await refetchHousehold()
     } finally {
       setSavingDownYears(false)
+    }
+  }
+
+  const submitBridgeSettings = async () => {
+    setSavingBridge(true)
+    setBridgeError(null)
+    try {
+      const targetIncomeToday = Number(targetIncomeInput)
+      const swrPct = Number(swrInput)
+      const stopWorkAge = Number(stopWorkAgeInput)
+      if (!Number.isFinite(targetIncomeToday) || !Number.isFinite(swrPct) || !Number.isFinite(stopWorkAge)) {
+        throw new Error('enter a number for each field')
+      }
+      await patchJson('/api/household', {
+        id: household.id,
+        targetIncomeToday,
+        swr: swrPct / 100,
+        stopWorkAge,
+      })
+      await refetchHousehold()
+    } catch (err) {
+      setBridgeError(err instanceof Error ? err.message : 'failed to save')
+    } finally {
+      setSavingBridge(false)
     }
   }
 
@@ -439,6 +506,116 @@ function Plan() {
               />
             </HowWeWorkedThisOut>
           </div>
+        </div>
+      ) : null}
+
+      {band ? (
+        <div className="rounded-3xl bg-card p-6 shadow-soft">
+          <h3 className="text-[15px] font-semibold tracking-tight">Bridge check</h3>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Once you stop paid work, your pension stays locked until its own access age — does
+            what you'll hold outside it alone cover your target income until then?
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <AppField
+              label="Target income"
+              hint="today's money, per year"
+              prefix="£"
+              value={targetIncomeInput}
+              onChange={setTargetIncomeInput}
+              placeholder="40,000"
+              inputMode="decimal"
+              className="w-40"
+            />
+            <AppField
+              label="Safe withdrawal rate"
+              hint="%/yr"
+              value={swrInput}
+              onChange={setSwrInput}
+              placeholder="4"
+              inputMode="decimal"
+              className="w-36"
+            />
+            <AppField
+              label="Stop-work age"
+              value={stopWorkAgeInput}
+              onChange={setStopWorkAgeInput}
+              placeholder="55"
+              inputMode="numeric"
+              className="w-32"
+            />
+            <button
+              type="button"
+              disabled={savingBridge || !targetIncomeInput.trim() || !swrInput.trim() || !stopWorkAgeInput.trim()}
+              onClick={() => void submitBridgeSettings()}
+              className="rounded-full bg-foreground px-5 py-2.5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-95 disabled:opacity-40"
+            >
+              {savingBridge ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {bridgeError ? <p className="mt-2 text-[13px] text-muted-foreground">{bridgeError}</p> : null}
+
+          {bridgeReady && bridgeResults ? (
+            <>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-accent/30 p-4">
+                  <p className="text-[12px] text-muted-foreground">Low</p>
+                  <p className="mt-1 text-[15px] font-semibold leading-snug">
+                    {bridgeResults.low.covers ? 'Yes — it covers the gap.' : 'No — it falls short.'}
+                  </p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {bridgeResults.low.investmentsValue !== null
+                      ? money(bridgeResults.low.investmentsValue)
+                      : 'no figure at this age'}{' '}
+                    vs {money(bridgeResults.low.requiredValue)} needed
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-accent/30 p-4">
+                  <p className="text-[12px] text-muted-foreground">Mid</p>
+                  <p className="mt-1 text-[15px] font-semibold leading-snug">
+                    {bridgeResults.mid.covers ? 'Yes — it covers the gap.' : 'No — it falls short.'}
+                  </p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {bridgeResults.mid.investmentsValue !== null
+                      ? money(bridgeResults.mid.investmentsValue)
+                      : 'no figure at this age'}{' '}
+                    vs {money(bridgeResults.mid.requiredValue)} needed
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-accent/30 p-4">
+                  <p className="text-[12px] text-muted-foreground">High</p>
+                  <p className="mt-1 text-[15px] font-semibold leading-snug">
+                    {bridgeResults.high.covers ? 'Yes — it covers the gap.' : 'No — it falls short.'}
+                  </p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {bridgeResults.high.investmentsValue !== null
+                      ? money(bridgeResults.high.investmentsValue)
+                      : 'no figure at this age'}{' '}
+                    vs {money(bridgeResults.high.requiredValue)} needed
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <HowWeWorkedThisOut>
+                  <Working
+                    formula="Required pot = target annual income ÷ your safe withdrawal rate — the size that sustains that income indefinitely, so it trivially covers any shorter bridge too."
+                    numbers={`${money(household.targetIncomeToday!)} ÷ ${percent(household.swr)} = ${money(bridgeResults.mid.requiredValue)}`}
+                  />
+                  <Working
+                    formula={`Investments only — never pension, still locked; never cash — at age ${household.stopWorkAge}, for each of Low/Mid/High.`}
+                    numbers={`low ${bridgeResults.low.investmentsValue !== null ? money(bridgeResults.low.investmentsValue) : 'not in range'} · mid ${bridgeResults.mid.investmentsValue !== null ? money(bridgeResults.mid.investmentsValue) : 'not in range'} · high ${bridgeResults.high.investmentsValue !== null ? money(bridgeResults.high.investmentsValue) : 'not in range'}`}
+                  />
+                </HowWeWorkedThisOut>
+              </div>
+            </>
+          ) : (
+            <p className="mt-5 text-[13px] text-muted-foreground">
+              Set your target income and stop-work age above to see whether what you'll hold
+              outside your pension alone would carry you through to then.
+            </p>
+          )}
         </div>
       ) : null}
 

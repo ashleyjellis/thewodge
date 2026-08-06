@@ -63,6 +63,19 @@ export function orderedBandRange(a: number, b: number): { low: number; high: num
   return a <= b ? { low: a, high: b } : { low: b, high: a }
 }
 
+/**
+ * Slices a band series at a specific age — the investments pot's value
+ * (never pension, locked until its own access age; never cash, a separate
+ * job) at whichever point matches that age exactly. Null when the age
+ * falls outside the projected horizon (before today's age, or beyond the
+ * final projected year) — a real "we can't answer this" rather than a
+ * guess (see bridgeCheck.ts).
+ */
+export function investmentsValueAtAge(points: ScheduledYearPoint[], age: number): number | null {
+  const point = points.find((p) => p.age === age)
+  return point ? point.investments.endValue : null
+}
+
 export function buildPlanBand(input: ScheduledPlanInput, downYearsCount: number): PlanBand {
   const midPoints = projectScheduledYearly(input)
   const mid = seriesFor(midPoints)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPlanBand, orderedBandRange } from './planBand'
+import { buildPlanBand, investmentsValueAtAge, orderedBandRange } from './planBand'
 import type { ScheduledPlanInput } from './scheduledPlan'
 
 const input: ScheduledPlanInput = {
@@ -80,5 +80,31 @@ describe('orderedBandRange', () => {
 
   it('a tied pair is a valid zero-width range either way', () => {
     expect(orderedBandRange(15, 15)).toEqual({ low: 15, high: 15 })
+  })
+})
+
+describe('investmentsValueAtAge', () => {
+  it('returns the investments pot value at the matching age', () => {
+    const band = buildPlanBand(input, 0)
+    const point = band.mid.points.find((p) => p.age === 45)!
+    expect(investmentsValueAtAge(band.mid.points, 45)).toBe(point.investments.endValue)
+  })
+
+  it('never returns the pension or total value — investments only', () => {
+    const band = buildPlanBand(input, 0)
+    const point = band.mid.points.find((p) => p.age === 45)!
+    const result = investmentsValueAtAge(band.mid.points, 45)
+    expect(result).not.toBe(point.pension.endValue)
+    expect(result).not.toBe(point.total.endValue)
+  })
+
+  it('returns null when the age falls outside the projected horizon', () => {
+    const band = buildPlanBand(input, 0)
+    expect(investmentsValueAtAge(band.mid.points, 200)).toBeNull()
+    expect(investmentsValueAtAge(band.mid.points, 5)).toBeNull()
+  })
+
+  it('returns null for an empty series rather than throwing', () => {
+    expect(investmentsValueAtAge([], 45)).toBeNull()
   })
 })
