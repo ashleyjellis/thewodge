@@ -530,6 +530,8 @@ export function buildScheduledForecastYearRows(params: {
       actualGrowth,
       forecastAdditions: scheduled.contribution,
       actualAdditions,
+      lowValue: null,
+      highValue: null,
     }
   })
 }

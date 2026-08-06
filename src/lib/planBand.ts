@@ -47,6 +47,22 @@ function seriesFor(points: ScheduledYearPoint[]): PlanBandSeries {
   return { points, crossoverYear: findScheduledCrossoverYear(points) }
 }
 
+/**
+ * Only the FINAL ending value is guaranteed low <= high, by construction —
+ * that's the one figure the worst/best placement search actually optimises
+ * for. At an intermediate year, low and high can genuinely cross: a placed-
+ * late loss on a large balance can end up costing more than a placed-early
+ * loss on a small one, even though it lands second in the horizon. That's
+ * real sequence-of-returns behaviour, not a bug — but a display (a range
+ * column, a band-chart fill) still needs low <= high at every single point
+ * it renders, or a table row reads backwards and a chart polygon
+ * self-intersects. This reorders a pair for display without touching
+ * either series' own data.
+ */
+export function orderedBandRange(a: number, b: number): { low: number; high: number } {
+  return a <= b ? { low: a, high: b } : { low: b, high: a }
+}
+
 export function buildPlanBand(input: ScheduledPlanInput, downYearsCount: number): PlanBand {
   const midPoints = projectScheduledYearly(input)
   const mid = seriesFor(midPoints)

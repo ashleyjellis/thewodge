@@ -39,6 +39,7 @@ export function ForecastYearTable({
   onPotChange: (pot: PotFilter) => void
 }) {
   const hasOriginal = rows.some((r) => r.originalValue !== null)
+  const hasRange = rows.some((r) => r.lowValue !== null && r.highValue !== null)
   const lastAge = rows[rows.length - 1]?.age
 
   return (
@@ -78,6 +79,11 @@ export function ForecastYearTable({
               >
                 Value
               </th>
+              {hasRange ? (
+                <th rowSpan={2} className="border-l border-border py-2 pl-3 pr-3 text-right align-bottom font-medium">
+                  Range
+                </th>
+              ) : null}
               <th
                 colSpan={2}
                 className="border-l border-border py-2 pl-3 pr-3 text-center font-semibold text-foreground/70"
@@ -107,6 +113,13 @@ export function ForecastYearTable({
                 {hasOriginal ? cell(row.originalValue, 'text-muted-foreground/50') : null}
                 {cell(row.forecastValue, 'font-semibold text-foreground', true)}
                 {cell(row.actualValue, 'text-muted-foreground')}
+                {hasRange ? (
+                  <td className="border-l border-border py-2.5 pl-3 pr-3 text-right text-muted-foreground">
+                    {row.lowValue !== null && row.highValue !== null
+                      ? `${money(row.lowValue)} – ${money(row.highValue)}`
+                      : '—'}
+                  </td>
+                ) : null}
                 {cell(row.forecastGrowth, 'text-muted-foreground', true)}
                 {cell(row.actualGrowth, 'text-muted-foreground')}
                 {cell(row.forecastAdditions, 'text-muted-foreground', true)}

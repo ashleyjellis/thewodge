@@ -32,7 +32,7 @@ import {
 } from '@/lib/householdForecast'
 import { buildScheduledForecastYearRows, buildScheduledPlan, buildScheduledPlanInput } from '@/lib/scheduledPlan'
 import { checkpointSchedule } from '@/lib/checkpointState'
-import { buildPlanBand } from '@/lib/planBand'
+import { buildPlanBand, orderedBandRange } from '@/lib/planBand'
 import { money, percent } from '@/lib/format'
 import { BandChart, type BandPoint } from '@/components/BandChart'
 import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
@@ -44,17 +44,6 @@ import { ScenariosTable } from '@/components/app/ScenariosTable'
 import { NavLink } from '@/components/NavLink'
 
 const DOWN_YEAR_OPTIONS = [0, 1, 2, 3, 5]
-
-// Phase 6: proves BandChart renders correctly before Phase 7 swaps this for
-// real planBand.ts output — a plausible illustrative curve, not real numbers.
-const FIXTURE_BAND_POINTS: BandPoint[] = [
-  { x: '2026', low: 50_000, mid: 52_000, high: 54_000 },
-  { x: '2029', low: 90_000, mid: 105_000, high: 118_000 },
-  { x: '2032', low: 140_000, mid: 175_000, high: 205_000 },
-  { x: '2035', low: 210_000, mid: 280_000, high: 340_000 },
-  { x: '2038', low: 300_000, mid: 430_000, high: 540_000 },
-  { x: '2041', low: 420_000, mid: 640_000, high: 830_000 },
-]
 
 const planSeo = seo({
   title: `Plan — ${SITE_NAME}`,
@@ -257,6 +246,36 @@ function Plan() {
   })
   const band = bandInput ? buildPlanBand(bandInput, household.downYearsCount) : null
 
+  // mid/low/high are all projected from the same input/startYear/targetAge
+  // (just different rateOverrides), so they share identical length and
+  // calendarYear at every index — a straight zip, no year-lookup needed.
+  // orderedBandRange guards a real quirk of "worst placement vs best
+  // placement": only the FINAL value is guaranteed low <= high by
+  // construction — at an intermediate year they can genuinely cross (a
+  // late loss on a large balance can cost more than an early loss on a
+  // small one), which would otherwise read backwards or self-intersect.
+  const bandPoints: BandPoint[] = band
+    ? band.mid.points.map((p, i) => {
+        const { low, high } = orderedBandRange(band.low.points[i]!.total.endValue, band.high.points[i]!.total.endValue)
+        return { x: String(p.calendarYear), low, mid: p.total.endValue, high }
+      })
+    : []
+
+  // overlays the band's low/high onto whichever ledger rows are showing
+  // (flat baseline or schedule-aware) — household total only, regardless of
+  // the table's own pot filter, matching the down-years card above it.
+  // Only when a genuine (non-zero-width) band exists, so a table full of
+  // "£X – £X" rows never appears when downYearsCount is 0.
+  const hasBand = band !== null && band.lowStartYear !== null
+  const lowByYear = new Map(hasBand ? band!.low.points.map((p) => [p.calendarYear, p.total.endValue]) : [])
+  const highByYear = new Map(hasBand ? band!.high.points.map((p) => [p.calendarYear, p.total.endValue]) : [])
+  const tableRowsWithRange: ForecastYearRow[] = tableRows.map((row) => {
+    const rawLow = lowByYear.get(row.calendarYear)
+    const rawHigh = highByYear.get(row.calendarYear)
+    const ordered = rawLow !== undefined && rawHigh !== undefined ? orderedBandRange(rawLow, rawHigh) : null
+    return { ...row, lowValue: ordered?.low ?? null, highValue: ordered?.high ?? null }
+  })
+
   const submitReplan = async () => {
     setSaving(true)
     setError(null)
@@ -402,13 +421,24 @@ function Plan() {
             cost you something, so High still sits below Mid.
           </p>
 
-          {/* Phase 6: the chart component itself, proven against fixture
-              numbers — real planBand.ts output (the band/mid values above)
-              gets wired in next, once the chart's own rendering is settled. */}
-          <p className="mt-5 text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Preview — example numbers
-          </p>
-          <BandChart points={FIXTURE_BAND_POINTS} className="mt-3" />
+          <BandChart points={bandPoints} className="mt-5" />
+
+          <div className="mt-4">
+            <HowWeWorkedThisOut>
+              {hasBand ? (
+                <Working
+                  formula={`Low and High both apply ${household.downYearsCount} down year${household.downYearsCount === 1 ? '' : 's'} in a row — Low starting the worst possible year we found for it, High the best.`}
+                  numbers={`worst placement: ${band!.lowStartYear} · best placement: ${band!.highStartYear}`}
+                />
+              ) : (
+                <p>No down years applied — Low, Mid and High are the same plain projection.</p>
+              )}
+              <Working
+                formula="Crossover: the first year growth adds more than you contribute that year — the point contributions become the minor part of the story."
+                numbers={`Mid crosses over ${band!.mid.crossoverYear ?? 'not within this horizon'}${hasBand ? ` · Low ${band!.low.crossoverYear ?? 'not within this horizon'} · High ${band!.high.crossoverYear ?? 'not within this horizon'}` : ''}`}
+              />
+            </HowWeWorkedThisOut>
+          </div>
         </div>
       ) : null}
 
@@ -425,7 +455,7 @@ function Plan() {
             guess.
           </p>
         ) : null}
-        <ForecastYearTable rows={tableRows} pot={pot} onPotChange={setPot} />
+        <ForecastYearTable rows={tableRowsWithRange} pot={pot} onPotChange={setPot} />
       </div>
 
       <div className="rounded-3xl bg-card p-7 shadow-soft">

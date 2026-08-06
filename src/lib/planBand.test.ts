@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPlanBand } from './planBand'
+import { buildPlanBand, orderedBandRange } from './planBand'
 import type { ScheduledPlanInput } from './scheduledPlan'
 
 const input: ScheduledPlanInput = {
@@ -66,5 +66,19 @@ describe('buildPlanBand', () => {
     if (band.mid.crossoverYear !== null && band.low.crossoverYear !== null) {
       expect(band.low.crossoverYear).toBeGreaterThanOrEqual(band.mid.crossoverYear)
     }
+  })
+})
+
+describe('orderedBandRange', () => {
+  it('returns the pair unchanged when already low-to-high', () => {
+    expect(orderedBandRange(10, 20)).toEqual({ low: 10, high: 20 })
+  })
+
+  it('swaps a "backwards" pair — a real possibility at an intermediate year, only the final value is guaranteed ordered', () => {
+    expect(orderedBandRange(20, 10)).toEqual({ low: 10, high: 20 })
+  })
+
+  it('a tied pair is a valid zero-width range either way', () => {
+    expect(orderedBandRange(15, 15)).toEqual({ low: 15, high: 15 })
   })
 })

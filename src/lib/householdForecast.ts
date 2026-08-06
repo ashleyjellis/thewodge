@@ -415,6 +415,14 @@ export type ForecastYearRow = {
   actualGrowth: number | null
   forecastAdditions: number
   actualAdditions: number | null
+  /** the down-years band's low/high TOTAL HOUSEHOLD value for this calendar
+   *  year (planBand.ts) — net worth only, regardless of pot filter, and
+   *  null whenever no band exists yet (no live schedule to project) or
+   *  downYearsCount is 0. Never set by this function — a page overlays
+   *  these after the fact, since the band is a live-schedule concept this
+   *  frozen-baseline builder has no way to know about. */
+  lowValue: number | null
+  highValue: number | null
 }
 
 /**
@@ -465,6 +473,8 @@ export function buildForecastYearRows(params: {
         actualGrowth,
         forecastAdditions: plan.contribution,
         actualAdditions,
+        lowValue: null,
+        highValue: null,
       }
     })
 }
