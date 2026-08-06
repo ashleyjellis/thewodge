@@ -14,6 +14,7 @@ import { buildFinancialDiary } from '@/lib/diary'
 import { AccountsSetup } from '@/components/app/AccountsSetup'
 import { CheckpointTimeline } from '@/components/app/CheckpointTimeline'
 import { FinancialDiary } from '@/components/app/FinancialDiary'
+import { DiaryParseInput } from '@/components/app/DiaryParseInput'
 
 const accountsSeo = seo({
   title: `Accounts — ${SITE_NAME}`,
@@ -33,7 +34,9 @@ function Accounts() {
   const { household, people } = useHousehold()
   const { accounts } = useAccounts(household?.id ?? null)
   const { snapshots } = useSnapshots(household?.id ?? null)
-  const { contributionChanges, plannedEvents } = usePlan(household?.id ?? null)
+  const { contributionChanges, plannedEvents, addContributionChange, addPlannedEvent } = usePlan(
+    household?.id ?? null,
+  )
   const { history } = useCheckpoints(household?.id ?? null)
 
   const diaryEntries = buildFinancialDiary({
@@ -47,6 +50,13 @@ function Accounts() {
     <div className="space-y-10">
       <AccountsSetup />
       <CheckpointTimeline history={history} />
+      <DiaryParseInput
+        people={people}
+        accounts={accounts}
+        contributionChanges={contributionChanges}
+        onAddContributionChange={addContributionChange}
+        onAddPlannedEvent={addPlannedEvent}
+      />
       <FinancialDiary entries={diaryEntries} accounts={accounts} people={people} />
     </div>
   )
