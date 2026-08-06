@@ -14,7 +14,7 @@ import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
 import { usePlan } from '@/state/usePlan'
-import { actualTotalAsOf } from '@/lib/householdForecast'
+import { actualTotalAsOf, type PotCategory } from '@/lib/householdForecast'
 import { buildPlanBand } from '@/lib/planBand'
 import { buildScheduledPlanInput } from '@/lib/scheduledPlan'
 import { resolveTodayState } from '@/lib/todayState'
@@ -23,6 +23,8 @@ import { TodayIfSandbox } from '@/components/app/TodayIfSandbox'
 import { CrossoverAmbient } from '@/components/app/CrossoverAmbient'
 import { CrossoverFullScreenMoment } from '@/components/app/CrossoverFullScreenMoment'
 import { DownMarketReassurance } from '@/components/app/DownMarketReassurance'
+import { ExtraContributionShortcut } from '@/components/app/ExtraContributionShortcut'
+import { MarginalValueCalculator } from '@/components/app/MarginalValueCalculator'
 
 const todaySeo = seo({
   title: `Today — ${SITE_NAME}`,
@@ -48,6 +50,7 @@ function Today() {
   // param itself is consumed exactly once, never persisted, but this local
   // flag keeps the moment showing until the user dismisses it
   const [showMoment, setShowMoment] = useState(() => Boolean(justChanged))
+  const [sandboxSeed, setSandboxSeed] = useState<{ pot: PotCategory; extraMonthly: number } | null>(null)
 
   useEffect(() => {
     if (justChanged) {
@@ -108,7 +111,19 @@ function Today() {
         <CrossoverAmbient crossoverYear={todayState.crossoverYear} />
       )}
 
-      <TodayIfSandbox />
+      <ExtraContributionShortcut
+        onModel={(extraMonthly) => setSandboxSeed({ pot: 'investments', extraMonthly })}
+      />
+      <TodayIfSandbox seed={sandboxSeed} />
+
+      {household && bandInput ? (
+        <MarginalValueCalculator
+          currentAge={bandInput.age}
+          crossoverYear={crossoverYear}
+          currentCalendarYear={currentCalendarYear}
+          annualRate={household.realReturn}
+        />
+      ) : null}
     </div>
   )
 }

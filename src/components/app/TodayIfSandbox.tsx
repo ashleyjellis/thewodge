@@ -12,7 +12,7 @@
  * /app's own Dashboard tab, which doesn't get this feature, so its prop
  * surface stays untouched.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { usePlan } from '@/state/usePlan'
@@ -28,7 +28,17 @@ const POTS: { value: PotCategory; label: string }[] = [
   { value: 'cash', label: 'Cash' },
 ]
 
-export function TodayIfSandbox() {
+export function TodayIfSandbox({
+  seed,
+}: {
+  /** ExtraContributionShortcut's way of opening this pre-applied — an
+   *  extra amount to add on top of the pot's current monthly figure,
+   *  rather than the "type a new absolute figure" the field normally
+   *  takes. A new object (even the same numbers) re-seeds and reopens;
+   *  reopening manually via "Try it" always starts blank, since the seed
+   *  is only ever set by an explicit shortcut click. */
+  seed?: { pot: PotCategory; extraMonthly: number } | null
+} = {}) {
   const { household, people, loading: householdLoading } = useHousehold()
   const { accounts, loading: accountsLoading } = useAccounts(household?.id ?? null)
   const { contributionChanges, plannedEvents, loading: planLoading } = usePlan(household?.id ?? null)
@@ -36,6 +46,20 @@ export function TodayIfSandbox() {
   const [open, setOpen] = useState(false)
   const [pot, setPot] = useState<PotCategory>('investments')
   const [monthlyInput, setMonthlyInput] = useState('')
+
+  useEffect(() => {
+    if (!seed || accountsLoading) return
+    const baseMonthlyForPot = accounts
+      .filter((a) => a.potCategory === seed.pot)
+      .reduce((s, a) => s + a.monthlyContribution, 0)
+    setPot(seed.pot)
+    setMonthlyInput(String(baseMonthlyForPot + seed.extraMonthly))
+    setOpen(true)
+    // deliberately excludes `accounts` — only re-seeds when the shortcut is
+    // actually clicked again (a new `seed` object) or once loading finishes,
+    // not on every incidental accounts refetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, accountsLoading])
 
   const close = () => {
     setOpen(false)
