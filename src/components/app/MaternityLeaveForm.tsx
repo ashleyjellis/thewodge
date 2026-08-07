@@ -18,6 +18,7 @@ import { AppSelect } from './AppSelect'
 import { FilterPill } from './FilterPill'
 import { Modal } from './Modal'
 import { PlanUpdatePreview } from './PlanUpdatePreview'
+import { HowWeWorkedThisOut, Working } from '@/components/HowWeWorkedThisOut'
 
 const POT_LABELS: Record<PotCategory, string> = {
   pension: 'Pension',
@@ -169,6 +170,31 @@ export function MaternityLeaveForm({
             ' pick a back-to-work year after the leave-start year to see the drop.'
           )}
         </p>
+      </div>
+
+      <div className="mt-3">
+        <HowWeWorkedThisOut>
+          <Working
+            formula="Average weekly earnings = annual salary ÷ 52."
+            numbers={`${money(person.salary)} ÷ 52 = ${money(pay.averageWeeklyEarnings)}/wk`}
+          />
+          <Working
+            formula={
+              leaveType === 'maternity'
+                ? '6 weeks at 90% of average weekly earnings, then 33 weeks at the lower of the flat statutory rate or 90% AWE — 39 weeks paid in total.'
+                : '2 weeks, all at the lower of the flat statutory rate or 90% of average weekly earnings — no higher-rate tier for paternity.'
+            }
+            numbers={
+              leaveType === 'maternity'
+                ? `6 wks × ${money(pay.higherRateWeeklyPay)} + 33 wks × ${money(pay.lowerRateWeeklyPay)}`
+                : `2 wks × ${money(pay.lowerRateWeeklyPay)}`
+            }
+          />
+          <Working
+            formula="Blended monthly figure: the total statutory pay over the paid weeks, spread evenly and annualised — a simplification for one steady monthly drop, not a week-by-week schedule."
+            numbers={`${money(pay.totalStatutoryPay)} ÷ ${pay.paidWeeks} wks × 52 ÷ 12 = ${money(pay.blendedMonthlyPay)}/mo`}
+          />
+        </HowWeWorkedThisOut>
       </div>
 
       <div className="mt-5 flex gap-2">

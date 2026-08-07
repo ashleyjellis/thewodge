@@ -62,22 +62,33 @@ function Today() {
   }, [])
 
   const { household, people } = useHousehold()
-  const { accounts } = useAccounts(household?.id ?? null)
+  const { accounts, loading: accountsLoading } = useAccounts(household?.id ?? null)
   const { snapshots } = useSnapshots(household?.id ?? null)
-  const { contributionChanges, plannedEvents } = usePlan(household?.id ?? null)
+  const { contributionChanges, plannedEvents, loading: planLoading } = usePlan(household?.id ?? null)
 
   const currentCalendarYear = new Date().getUTCFullYear()
-  const bandInput = household
-    ? buildScheduledPlanInput({
-        owner: 'total',
-        startYear: currentCalendarYear - 1,
-        people,
-        household,
-        accounts,
-        changes: contributionChanges,
-        events: plannedEvents,
-      })
-    : null
+  // Waits for accounts/plan to actually finish loading, not just for
+  // household — useAccounts/usePlan both default to an empty array while
+  // loading, which buildScheduledPlanInput would happily accept and turn
+  // into a real (but all-zero, no-growth) input. That earlier, wrong
+  // crossoverYear (always null for an all-zero projection) would get
+  // baked into MarginalValueCalculator's own initial "which horizon"
+  // choice via its useState initializer and never correct itself once the
+  // real data arrived — the same async-vs-lazy-init trap as elsewhere in
+  // this app, just easier to miss here since nothing looked broken at a
+  // glance.
+  const bandInput =
+    household && !accountsLoading && !planLoading
+      ? buildScheduledPlanInput({
+          owner: 'total',
+          startYear: currentCalendarYear - 1,
+          people,
+          household,
+          accounts,
+          changes: contributionChanges,
+          events: plannedEvents,
+        })
+      : null
   const band = bandInput && household ? buildPlanBand(bandInput, household.downYearsCount) : null
   const crossoverYear = band?.mid.crossoverYear ?? null
 
