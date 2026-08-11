@@ -54,7 +54,7 @@ must be replayable over historical snapshots without re-fetching.
 | Stage | Module | Status |
 |---|---|---|
 | 1. Fetch | `fetch.py` | built |
-| 2. Detect changes | `normalise.py` → `detect.py` | baseline only — see below |
+| 2. Detect changes | `normalise.py` + `detect.py` | built |
 | 3. Extract | `extract.py` | not built |
 | 4. Review queue | admin UI | not built |
 
@@ -88,28 +88,74 @@ still continues: that is a flag for a human, not a circuit breaker, because a
 source that has genuinely moved needs someone to notice rather than the system
 quietly giving up.
 
-### Stage 2 — change detection (partially built)
+### Stage 2 — change detection
 
-`normalise.py` currently contains only the content-agnostic baseline: decode,
-collapse whitespace, lowercase. The HTML-aware ruleset — stripping
-script/style/comments, dropping nonce and CSRF attributes, removing
-known-dynamic regions like cookie banners and "last updated" stamps, honouring
-a source's `content_selector` — is the next phase's work, and it is where the
-real effort goes: untuned normalisation produces daily false positives on
-every source and makes the review queue unusable.
+Detection runs inline as each page is captured. `detect.py` is a separate
+maintenance tool, not part of the scheduled run — see "Replaying" below.
 
-The fetcher already computes hashes and sets `is_change` by comparing against
-the previous *successful* capture, so the loop works end to end today; that
-next phase replaces the internals of `normalise.py` without touching
-`fetch.py`.
+**What gets hashed: text, not markup.** After cleaning, `normalise.py`
+extracts the page's visible text and hashes that. This is a deliberate
+departure from the brief, which lists attribute-level cleaning steps (drop
+`nonce`, `csrf`, `data-testid`, auto-generated `id`, strip cache-busting query
+strings) implying markup hashing. Extracting text subsumes every one of those
+for free — attributes, URLs and class names simply are not part of the hashed
+value — while also absorbing the much larger category the brief could not
+enumerate in advance: framework class-name churn, wrapper `<div>`
+restructuring, and every future templating change a CMS makes without touching
+a price.
 
-**One operational consequence, worth knowing before it surprises someone:**
-whenever the normalisation rules change, every source's normalised hash
-changes with them, so the first run afterwards reports a change on everything
-at once. It is self-correcting — the next run goes quiet — but normalisation
-should not be edited casually mid-collection, and a rules change is a good
-moment to re-run detection over stored snapshots rather than trusting the live
-diff.
+The tradeoff, stated plainly: a change that alters structure without altering
+visible text will not be flagged. For an archive of *published prices* that is
+the right trade, and it is recoverable rather than permanent, because the raw
+capture is always kept.
+
+**The governing asymmetry: when in doubt, keep it.** A false positive costs a
+reviewer a few seconds. A false negative means a repricing is never recorded,
+and historical pricing cannot be re-acquired afterwards at any price. So every
+removal rule is narrow, and each one names what it targets — an unexplained
+selector is impossible to audit later. `<time>` elements are never stripped
+for exactly this reason: a "last updated today" stamp is noise, but "effective
+from `<time>`1 March 2026`</time>`" is one of the most valuable facts on the
+page, and the bitemporal model depends on it.
+
+Order of operations:
+
+1. Narrow to the source's `content_selector`, if it has one — **first**, so a
+   redesigned header can never register as a pricing change. A selector that
+   matches nothing (or is malformed — it is typed by a human) falls back to
+   the whole page rather than yielding empty content, which would read as
+   "this source never changes again".
+2. Drop `script` / `style` / `noscript` / `template` / `svg` and comments.
+3. Drop known-dynamic regions: consent banners, live chat widgets, `aria-live`
+   regions, "last updated" stamps, market tickers.
+4. Extract text, collapse whitespace, lowercase, hash.
+
+PDFs bypass all of it and are hashed as raw bytes: served statically their
+bytes are already canonical, and pulling text out of one needs a real
+extractor, which belongs with Stage 3.
+
+### Replaying after a rules change
+
+Whenever normalisation changes, every hash computed under the old rules is
+stale, so the next live run would report a change on every source at once.
+`detect.py` exists for that moment — it re-runs normalisation over the stored
+raw bytes and rebuilds the derived columns:
+
+```bash
+python -m pipeline.detect                    # report over everything, change nothing
+python -m pipeline.detect --source-id <id>   # one source
+python -m pipeline.detect --write            # persist the recomputed values
+```
+
+Dry-run by default; `--write` is required to persist.
+
+`snapshots` is append-only and this updates two of its columns, which is worth
+being precise about. `observed_at`, `raw_sha256`, `storage_key`, `http_status`
+and the stored bytes are **evidence** — never touched, here or anywhere.
+`content_sha256` and `is_change` are **derived classification**: this
+pipeline's interpretation of that evidence under one set of rules. Rewriting
+an interpretation is not rewriting history; rewriting evidence would be, and
+nothing does it.
 
 ## Storage layout
 

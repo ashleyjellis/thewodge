@@ -11,5 +11,12 @@ boto3==1.35.99
 playwright==1.49.1
 python-dotenv==1.0.1
 
+# HTML parsing for change-detection normalisation. Used with Python's own
+# html.parser backend rather than lxml: no compiled dependency to build in
+# CI, and real provider pages are malformed often enough that a lenient
+# parser matters more than a fast one. Brings soupsieve, which supplies the
+# CSS selector support a source's content_selector needs.
+beautifulsoup4==4.15.0
+
 # tests
 pytest==9.1.1

@@ -1,0 +1,124 @@
+# Provider pricing archive — scheduled collection.
+#
+# Runs the fetcher only. Change detection happens inline as each page is
+# captured, so there is no separate detect step here: `pipeline/detect.py` is
+# a manual maintenance tool for replaying normalisation over stored history
+# after the rules change, and running it on a schedule would re-hash the
+# entire archive every few hours to no purpose.
+#
+# Hourly, even though no source is checked more than once a day. The fetcher
+# itself decides what is actually due from each source's `check_frequency`
+# and `last_checked_at`, so most runs do nothing and cost seconds. Frequent
+# scheduling buys resilience rather than freshness: GitHub delays or drops
+# scheduled runs under load, and an hourly cadence means a missed run is
+# absorbed rather than costing a day of collection. Every day of collection
+# compounds; every day missed is gone permanently.
+
+name: Archive pipeline
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      source_id:
+        description: "Fetch one source, ignoring its schedule"
+        required: false
+        type: string
+      frequency:
+        description: "Only fetch sources on this schedule"
+        required: false
+        type: choice
+        options: ["", daily, weekly, monthly]
+        default: ""
+
+# Never let two collection runs overlap. Concurrent fetchers would each hold
+# their own per-domain rate limiter and between them breach the politeness
+# floor the crawler promises. Queue rather than cancel: a run already part way
+# through captures should finish, not be killed.
+concurrency:
+  group: archive-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    # Generous, because the 5s per-domain floor means a run touching many
+    # sources on one provider is legitimately slow. Still bounded, so a hung
+    # request cannot burn the account's minutes.
+    timeout-minutes: 60
+
+    env:
+      ARCHIVE_TURSO_DATABASE_URL: ${{ secrets.ARCHIVE_TURSO_DATABASE_URL }}
+      ARCHIVE_TURSO_AUTH_TOKEN: ${{ secrets.ARCHIVE_TURSO_AUTH_TOKEN }}
+      ARCHIVE_R2_BUCKET: ${{ secrets.ARCHIVE_R2_BUCKET }}
+      ARCHIVE_R2_ENDPOINT_URL: ${{ secrets.ARCHIVE_R2_ENDPOINT_URL }}
+      ARCHIVE_R2_ACCESS_KEY_ID: ${{ secrets.ARCHIVE_R2_ACCESS_KEY_ID }}
+      ARCHIVE_R2_SECRET_ACCESS_KEY: ${{ secrets.ARCHIVE_R2_SECRET_ACCESS_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      # Both clients fall back to local storage when their credentials are
+      # absent — exactly the behaviour that makes local development painless,
+      # and exactly the wrong behaviour here. Without this gate a
+      # misconfigured run would capture happily into a runner's temporary disk
+      # and be reported as a success, while the archive silently recorded
+      # nothing. Fail loudly instead.
+      - name: Verify collection targets are configured
+        run: |
+          missing=()
+          for var in ARCHIVE_TURSO_DATABASE_URL ARCHIVE_TURSO_AUTH_TOKEN \
+                     ARCHIVE_R2_BUCKET ARCHIVE_R2_ENDPOINT_URL \
+                     ARCHIVE_R2_ACCESS_KEY_ID ARCHIVE_R2_SECRET_ACCESS_KEY; do
+            [ -z "${!var}" ] && missing+=("$var")
+          done
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing repository secrets: ${missing[*]}"
+            echo "Without these the pipeline would write to the runner's local disk"
+            echo "and the captures would be discarded when the job ends."
+            exit 1
+          fi
+          echo "All collection targets configured."
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pipeline/requirements.txt') }}
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: playwright install --with-deps chromium
+
+      # Dispatch inputs are passed through the environment rather than
+      # interpolated into the command line. `${{ }}` substitution happens
+      # before the shell ever sees the script, so an input containing shell
+      # metacharacters would otherwise be executed rather than passed as an
+      # argument.
+      - name: Fetch due sources
+        env:
+          INPUT_SOURCE_ID: ${{ inputs.source_id }}
+          INPUT_FREQUENCY: ${{ inputs.frequency }}
+        run: |
+          args=()
+          if [ -n "$INPUT_SOURCE_ID" ]; then
+            args+=(--source-id "$INPUT_SOURCE_ID")
+          fi
+          if [ -n "$INPUT_FREQUENCY" ]; then
+            args+=(--frequency "$INPUT_FREQUENCY")
+          fi
+          python -m pipeline.fetch "${args[@]}"
