@@ -23,6 +23,13 @@ src/routeTree.gen.ts
 local.db
 wodge.db
 
+# python (archive pipeline)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+pipeline/.venv/
+
 # logs & os
 *.log
 .DS_Store

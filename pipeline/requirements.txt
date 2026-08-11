@@ -1,0 +1,15 @@
+# Archive pipeline dependencies. Install into a venv:
+#   python3 -m venv pipeline/.venv
+#   pipeline/.venv/bin/pip install -r pipeline/requirements.txt
+#
+# Playwright additionally needs its browser binary:
+#   pipeline/.venv/bin/playwright install chromium
+
+httpx==0.28.1
+libsql-client==0.3.1
+boto3==1.35.99
+playwright==1.49.1
+python-dotenv==1.0.1
+
+# tests
+pytest==9.1.1
