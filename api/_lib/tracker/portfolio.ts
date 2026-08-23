@@ -22,8 +22,12 @@ import {
 } from '../../../src/server/trackerDb/portfolios.js'
 import { summarisePortfolio } from '../../../src/lib/tracker/directory.js'
 import { listReadings } from '../../../src/server/trackerDb/readings.js'
-import { flows as flowsTable } from '../../../src/server/trackerDb/schema.js'
-import { eq } from 'drizzle-orm'
+import {
+  flows as flowsTable,
+  holdings as holdingsTable,
+  portfolioEvents as portfolioEventsTable,
+} from '../../../src/server/trackerDb/schema.js'
+import { desc, eq } from 'drizzle-orm'
 import { buildSeries } from '../../../src/lib/tracker/series.js'
 import { timeWeightedReturn } from '../../../src/lib/tracker/returns.js'
 import { analyseDrawdown } from '../../../src/lib/tracker/drawdown.js'
@@ -66,9 +70,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       return
     }
 
-    const [readings, portfolioFlows] = await Promise.all([
+    const [readings, portfolioFlows, portfolioHoldings, portfolioEventRows] = await Promise.all([
       listReadings(db, portfolio.id),
       db.select().from(flowsTable).where(eq(flowsTable.portfolioId, portfolio.id)),
+      db
+        .select()
+        .from(holdingsTable)
+        .where(eq(holdingsTable.portfolioId, portfolio.id))
+        .orderBy(holdingsTable.asOfDate),
+      db
+        .select()
+        .from(portfolioEventsTable)
+        .where(eq(portfolioEventsTable.portfolioId, portfolio.id))
+        .orderBy(desc(portfolioEventsTable.eventDate)),
     ])
 
     // Peers are grouped by the provider's own risk label, which is the
@@ -149,6 +163,26 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
         effectiveDate: flow.effectiveDate,
         amountPence: flow.amountPence,
         kind: flow.kind,
+      })),
+      // Every snapshot, not just the latest: the page's whole point is the
+      // month-on-month diff, which needs two. Sent raw so the grouping and
+      // the comparison happen in one tested place rather than half here and
+      // half in the component.
+      holdings: portfolioHoldings.map((holding) => ({
+        asOfDate: holding.asOfDate,
+        instrumentName: holding.instrumentName,
+        assetClass: holding.assetClass,
+        region: holding.region,
+        weightBps: holding.weightBps,
+        isin: holding.isin,
+      })),
+      events: portfolioEventRows.map((event) => ({
+        eventDate: event.eventDate,
+        kind: event.kind,
+        title: event.title,
+        bodyMd: event.bodyMd,
+        sourceUrl: event.sourceUrl,
+        isGenerated: event.isGenerated,
       })),
       peers,
     })

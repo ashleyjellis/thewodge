@@ -363,3 +363,50 @@ export const adminUsers = sqliteTable('admin_users', {
   passwordHash: text('password_hash').notNull(),
   createdAt: text('created_at').notNull().default(nowIso),
 })
+
+// ── portfolio_events ──────────────────────────────────────────────────────
+// The changelog: one dated feed per portfolio, mixing what the provider did
+// with what we noticed.
+//
+// `kind` separates entries an operator wrote from entries derived from the
+// holdings diff, because the two carry different authority. A rebalance
+// someone read in a provider's own note is a fact about the provider; a
+// holdings shift is our observation of two monthly snapshots, and it should
+// never be presented as though the firm announced it.
+//
+// `source_url` is where a reader goes to check a claim we are repeating.
+// Nullable, because a generated entry has no source but the data already in
+// this database.
+
+export const EVENT_KINDS = ['rebalance', 'fees', 'holdings', 'commentary'] as const
+export type EventKind = (typeof EVENT_KINDS)[number]
+
+export const portfolioEvents = sqliteTable(
+  'portfolio_events',
+  {
+    id: pk(),
+    portfolioId: integer('portfolio_id')
+      .notNull()
+      .references(() => portfolios.id),
+    eventDate: text('event_date').notNull(),
+    kind: text('kind').notNull().$type<EventKind>(),
+    title: text('title').notNull(),
+    bodyMd: text('body_md'),
+    sourceUrl: text('source_url'),
+    /**
+     * True when this entry was generated from the holdings diff rather than
+     * written by a person. The feed labels them differently, and a
+     * regenerated entry must be able to replace its predecessor without
+     * touching anything an operator wrote.
+     */
+    isGenerated: integer('is_generated', { mode: 'boolean' }).notNull().default(false),
+    createdAt: text('created_at').notNull().default(nowIso),
+  },
+  (t) => [
+    index('portfolio_events_portfolio_date_idx').on(t.portfolioId, t.eventDate),
+    check(
+      'portfolio_events_kind_check',
+      sql`${t.kind} in ('rebalance','fees','holdings','commentary')`,
+    ),
+  ],
+)

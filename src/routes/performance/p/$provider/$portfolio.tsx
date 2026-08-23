@@ -25,6 +25,20 @@ import { MaxWidthContainer } from '@/components/site/Container'
 import { DemoBanner } from '@/components/tracker/DemoBanner'
 import { SeriesChart } from '@/components/tracker/SeriesChart'
 import { PeerBars } from '@/components/tracker/PeerBars'
+import { SameRiskShelf } from '@/components/tracker/SameRiskShelf'
+import { AllocationBlock } from '@/components/tracker/AllocationBlock'
+import { Changelog, type ChangelogEntry } from '@/components/tracker/Changelog'
+import { LossFrequencyBlock } from '@/components/tracker/LossFrequencyBlock'
+import { CostBlock } from '@/components/tracker/CostBlock'
+import { analyseLossFrequency } from '@/lib/tracker/lossFrequency'
+import { buildBandCost } from '@/lib/tracker/costBand'
+import {
+  describeDiff,
+  diffSnapshots,
+  isChangelogWorthy,
+  snapshotsByDate,
+  type Holding,
+} from '@/lib/tracker/holdings'
 import {
   buildLedgerRows,
   buildProviderPageView,
@@ -64,7 +78,9 @@ type Payload = {
   }
   readings: { valuationDate: string; readAt: string; valuePence: number; source: string; note: string | null }[]
   flows: { effectiveDate: string; amountPence: number; kind: 'initial' | 'contribution' | 'withdrawal' }[]
-  peers: Peer[]
+  holdings?: Holding[]
+  events?: ChangelogEntry[]
+  peers: (Peer & { maxDrawdown?: number })[]
 }
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => (
@@ -221,6 +237,72 @@ function ProviderPage() {
     () => (data && view ? buildLedgerRows(view.series, data.readings, view.scale) : []),
     [data, view],
   )
+
+  const lossFrequency = useMemo(
+    () => analyseLossFrequency(view?.series ?? []),
+    [view],
+  )
+
+  /** The shelf, with each peer's fee resolved at the reader's balance. */
+  const shelfRows = useMemo(
+    () =>
+      (data?.peers ?? []).map((peer) => ({
+        ...peer,
+        returnFraction: feesDeducted
+          ? netPeerReturn(peer.returnFraction, peerFeeBps(peer, modelledBalancePence), peer.days ?? 0)
+          : peer.returnFraction,
+        feeBps: peerFeeBps(peer, modelledBalancePence),
+      })),
+    [data, feesDeducted, modelledBalancePence],
+  )
+
+  const bandCost = useMemo(
+    () =>
+      buildBandCost(
+        {
+          platformFeeBps: data?.portfolio.platformFeeBps ?? null,
+          feeTiersJson: data?.portfolio.feeTiersJson ?? null,
+        },
+        (data?.peers ?? []).map((peer) => ({
+          platformFeeBps: peer.platformFeeBps ?? null,
+          feeTiersJson: peer.feeTiersJson ?? null,
+        })),
+        modelledBalancePence,
+      ),
+    [data, modelledBalancePence],
+  )
+
+  /**
+   * The feed: entries an operator wrote, plus holdings shifts large enough to
+   * be a decision rather than drift.
+   *
+   * Generated here rather than written into the database on a schedule,
+   * because they are a function of the snapshots and nothing else — deriving
+   * them means they can never disagree with the allocation block above, and
+   * changing the threshold does not leave stale rows behind. They carry
+   * isGenerated so the feed can say which lines the provider announced and
+   * which we worked out.
+   */
+  const changelogEntries = useMemo<ChangelogEntry[]>(() => {
+    const written = (data?.events ?? []) as ChangelogEntry[]
+    const snapshots = snapshotsByDate(data?.holdings ?? [])
+
+    const generated: ChangelogEntry[] = []
+    for (let i = 0; i < snapshots.length - 1; i++) {
+      const diff = diffSnapshots(snapshots[i + 1]!, snapshots[i]!)
+      if (!isChangelogWorthy(diff)) continue
+      generated.push({
+        eventDate: diff.toDate,
+        kind: 'holdings',
+        title: describeDiff(diff).join(' '),
+        bodyMd: null,
+        sourceUrl: null,
+        isGenerated: true,
+      })
+    }
+
+    return [...written, ...generated]
+  }, [data])
 
   if (error) {
     return (
@@ -426,6 +508,82 @@ function ProviderPage() {
             </p>
           </section>
         ) : null}
+
+        {/* P1.1 — the route off this page to an alternative. */}
+        <section className="mt-14 border-t border-border pt-12">
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
+            Same risk level elsewhere
+          </h2>
+          <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-muted-foreground">
+            Risk labels are set by each firm and are not comparable between them — a 5 out of 10
+            at one provider is not a 5 out of 10 at another, and nobody audits the mapping.
+            Grouping here is by the provider's own label until there is enough history to group
+            by how much these have actually moved. Ordered by return, which over a run this short
+            is mostly the market rather than one manager beating another.
+          </p>
+          <SameRiskShelf
+            rows={shelfRows}
+            riskLabel={data.portfolio.riskLabel}
+            feesDeducted={feesDeducted}
+          />
+        </section>
+
+        {/* P1.2 — the only thing here a competitor cannot reproduce. */}
+        <section className="mt-14 border-t border-border pt-12">
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
+            What's inside, and what changed
+          </h2>
+          <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-muted-foreground">
+            Read off the provider's own breakdown once a month and written down, so that next
+            month there is something to compare against. The comparison is the part worth having:
+            anyone can publish what a portfolio holds today.
+          </p>
+          <AllocationBlock holdings={data.holdings ?? []} />
+        </section>
+
+        {/* P1.3 */}
+        <section className="mt-14 border-t border-border pt-12">
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
+            What has happened
+          </h2>
+          <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-muted-foreground">
+            Rebalances, changes to the charges, and shifts in what the portfolio holds that are
+            large enough to be a decision rather than drift. Entries marked as observed here were
+            worked out from two monthly snapshots rather than announced by the provider.
+          </p>
+          <Changelog entries={changelogEntries} />
+        </section>
+
+        {/* P1.4 — the other half of the drawdown story. */}
+        {!view.isThin ? (
+          <section className="mt-14 border-t border-border pt-12">
+            <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
+              How often it falls
+            </h2>
+            <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-muted-foreground">
+              The figure above the chart is how bad the worst of it got. This is how ordinary a
+              bad week is, which for most people is the more useful of the two.
+            </p>
+            <LossFrequencyBlock frequency={lossFrequency} />
+          </section>
+        ) : null}
+
+        {/* P1.5 */}
+        <section className="mt-14 border-t border-border pt-12">
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">
+            What the charges cost, in pounds
+          </h2>
+          <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-muted-foreground">
+            A year's return is mostly the market. A rate card is a fact about the provider that
+            will still be true in ten years, which makes it the most durable difference between
+            two portfolios at the same risk level.
+          </p>
+          <CostBlock
+            cost={bandCost}
+            modelledBalancePence={modelledBalancePence}
+            ocfBps={data.portfolio.ocfBps}
+          />
+        </section>
 
         <section className="mt-14 border-t border-border pt-12">
           <div className="flex flex-wrap items-baseline justify-between gap-4">

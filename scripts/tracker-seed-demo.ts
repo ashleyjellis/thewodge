@@ -95,6 +95,9 @@ if (existingDemo.length > 0) {
     await db.delete(schema.feeEvents).where(inArray(schema.feeEvents.portfolioId, portfolioIds))
     await db.delete(schema.holdings).where(inArray(schema.holdings.portfolioId, portfolioIds))
     await db
+      .delete(schema.portfolioEvents)
+      .where(inArray(schema.portfolioEvents.portfolioId, portfolioIds))
+    await db
       .delete(schema.alertSubscriptions)
       .where(inArray(schema.alertSubscriptions.portfolioId, portfolioIds))
     await db.delete(schema.notes).where(inArray(schema.notes.portfolioId, portfolioIds))
@@ -261,6 +264,23 @@ for (const benchmark of dataset.benchmarks) {
   }
 }
 
+if (dataset.events.length > 0) {
+  await db.insert(schema.portfolioEvents).values(
+    dataset.events.map((event) => ({
+      portfolioId: portfolioIdByKey.get(`${event.providerSlug}/${event.portfolioSlug}`)!,
+      eventDate: event.eventDate,
+      kind: event.kind,
+      title: event.title,
+      bodyMd: event.bodyMd,
+      sourceUrl: event.sourceUrl,
+      // Written entries. The feed's generated ones are derived from the
+      // holdings snapshots at render time rather than stored, so they can
+      // never drift out of step with the allocation block above them.
+      isGenerated: false,
+    })),
+  )
+}
+
 await db.insert(schema.notes).values(
   dataset.notes.map((note) => ({
     portfolioId: null,
@@ -284,7 +304,7 @@ console.log(
     `${dataset.portfolios.length} portfolios, ${readingCount} readings, ${flowCount} flows, ` +
     `${seriesPointCount} series points, ` +
     `${dataset.holdings.length} holdings, ${dataset.benchmarks.length} benchmarks, ` +
-    `${dataset.notes.length} notes, ${dataset.subscribers.length} subscribers`,
+    `${dataset.notes.length} notes, ${dataset.events.length} events, ${dataset.subscribers.length} subscribers`,
 )
 console.log('[tracker-seed] every provider is fictional and marked is_demo = 1')
 

@@ -352,16 +352,47 @@ export function buildDemoDataset(referenceDate = new Date().toISOString().slice(
   const holdings = holdingsFor.flatMap((key) => {
     const portfolio = portfolios.find((p) => `${p.providerSlug}-${p.slug.split('-').pop()}` === key)
     if (!portfolio) return []
-    const months = [0, 1, 2].map((m) => addDays(referenceDate, -30 * m))
-    const composition: { name: string; assetClass: AssetClass; region: string | null; bps: number }[] =
-      [
-        { name: 'Global Equity Index Fund', assetClass: 'equity', region: 'Global', bps: 4_800 },
-        { name: 'UK Equity Index Fund', assetClass: 'equity', region: 'UK', bps: 1_200 },
-        { name: 'Global Aggregate Bond Fund', assetClass: 'bond', region: 'Global', bps: 2_600 },
-        { name: 'Short-Dated Gilt Fund', assetClass: 'bond', region: 'UK', bps: 900 },
-        { name: 'Cash', assetClass: 'cash', region: null, bps: 500 },
-      ]
-    return months.flatMap((asOfDate) =>
+    // Three months that actually differ.
+    //
+    // These used to be the same five weights repeated, which meant the
+    // month-on-month diff — the single thing on the page a competitor cannot
+    // reproduce — never had anything to show but "nothing moved". Demo data
+    // exists to exercise UI states, exactly like the nine forced cases above,
+    // so these move: a weight drifts, cash builds, and a holding is sold and
+    // another bought. Every column still totals 10,000 bps.
+    type Slice = { name: string; assetClass: AssetClass; region: string | null; bps: number }
+
+    const oldest: Slice[] = [
+      { name: 'Global Equity Index Fund', assetClass: 'equity', region: 'Global', bps: 4_800 },
+      { name: 'UK Equity Index Fund', assetClass: 'equity', region: 'UK', bps: 1_200 },
+      { name: 'Global Aggregate Bond Fund', assetClass: 'bond', region: 'Global', bps: 2_600 },
+      { name: 'Short-Dated Gilt Fund', assetClass: 'bond', region: 'UK', bps: 1_140 },
+      { name: 'Cash', assetClass: 'cash', region: null, bps: 260 },
+    ]
+    // Cash 2.6% -> 4.1%, UK equity down 3.2 points.
+    const middle: Slice[] = [
+      { name: 'Global Equity Index Fund', assetClass: 'equity', region: 'Global', bps: 4_800 },
+      { name: 'UK Equity Index Fund', assetClass: 'equity', region: 'UK', bps: 880 },
+      { name: 'Global Aggregate Bond Fund', assetClass: 'bond', region: 'Global', bps: 2_600 },
+      { name: 'Short-Dated Gilt Fund', assetClass: 'bond', region: 'UK', bps: 1_310 },
+      { name: 'Cash', assetClass: 'cash', region: null, bps: 410 },
+    ]
+    // UK equity sold outright, an infrastructure holding bought.
+    const newest: Slice[] = [
+      { name: 'Global Equity Index Fund', assetClass: 'equity', region: 'Global', bps: 4_500 },
+      { name: 'Global Aggregate Bond Fund', assetClass: 'bond', region: 'Global', bps: 2_600 },
+      { name: 'Short-Dated Gilt Fund', assetClass: 'bond', region: 'UK', bps: 1_310 },
+      { name: 'Cash', assetClass: 'cash', region: null, bps: 410 },
+      { name: 'Global Infrastructure Fund', assetClass: 'alternative', region: 'Global', bps: 1_180 },
+    ]
+
+    const months: { asOfDate: string; composition: Slice[] }[] = [
+      { asOfDate: addDays(referenceDate, -60), composition: oldest },
+      { asOfDate: addDays(referenceDate, -30), composition: middle },
+      { asOfDate: referenceDate, composition: newest },
+    ]
+
+    return months.flatMap(({ asOfDate, composition }) =>
       composition.map((holding) => ({
         providerSlug: portfolio.providerSlug,
         portfolioSlug: portfolio.slug,
@@ -373,6 +404,35 @@ export function buildDemoDataset(referenceDate = new Date().toISOString().slice(
         isin: null,
       })),
     )
+  })
+
+  // A few written changelog entries, so the feed shows both what a provider
+  // announced and what was worked out here from the snapshots above.
+  const events = holdingsFor.flatMap((key) => {
+    const portfolio = portfolios.find((p) => `${p.providerSlug}-${p.slug.split('-').pop()}` === key)
+    if (!portfolio) return []
+    return [
+      {
+        providerSlug: portfolio.providerSlug,
+        portfolioSlug: portfolio.slug,
+        eventDate: addDays(referenceDate, -30),
+        kind: 'rebalance' as const,
+        title: 'Quarterly rebalance back to target weights',
+        bodyMd:
+          'The provider published its usual quarterly note. Nothing unusual in it — the ' +
+          'weights had drifted with the market and were put back.',
+        sourceUrl: null,
+      },
+      {
+        providerSlug: portfolio.providerSlug,
+        portfolioSlug: portfolio.slug,
+        eventDate: addDays(referenceDate, -74),
+        kind: 'fees' as const,
+        title: 'Platform charge unchanged at this year’s review',
+        bodyMd: null,
+        sourceUrl: null,
+      },
+    ]
   })
 
   // Benchmarks — relative volatility needs something to be relative to.
@@ -430,5 +490,5 @@ export function buildDemoDataset(referenceDate = new Date().toISOString().slice(
     unsubToken: `demo-unsub-${(i + 1).toString().padStart(3, '0')}`,
   }))
 
-  return { providers: DEMO_PROVIDERS, portfolios, holdings, benchmarks, notes, subscribers }
+  return { providers: DEMO_PROVIDERS, portfolios, holdings, events, benchmarks, notes, subscribers }
 }
