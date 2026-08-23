@@ -26,6 +26,7 @@
  */
 import 'dotenv/config'
 import { eq, inArray } from 'drizzle-orm'
+import { addDays } from '../src/lib/tracker/dates'
 import { buildDemoDataset } from '../src/lib/tracker/demoData'
 import { getTrackerDb, closeTrackerDb } from '../src/server/trackerDb/client'
 import * as schema from '../src/server/trackerDb/schema'
@@ -166,9 +167,11 @@ for (const portfolio of dataset.portfolios) {
     await db.insert(schema.readings).values({
       portfolioId,
       valuationDate: reading.valuationDate,
-      // A reading is a human looking at a screen, typically a day or two
-      // after the valuation date the provider quotes.
-      readAt: `${reading.valuationDate}T09:15:00Z`,
+      // valuation_date and read_at are genuinely different facts and the
+      // schema keeps them apart deliberately: providers quote a value "as
+      // at" a date, and a human reads it off the screen a day or two later.
+      // The demo data reflects that, or the distinction is invisible.
+      readAt: `${addDays(reading.valuationDate, 2)}T09:15:00Z`,
       valuePence: reading.valuePence,
       source: reading.source,
     })

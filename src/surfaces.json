@@ -30,7 +30,12 @@
       "basePath": "/performance",
       "visible": true,
       "indexable": false,
-      "nav": []
+      "nav": [
+        {
+          "to": "/performance",
+          "label": "Portfolios"
+        }
+      ]
     }
   ],
   "alwaysDisallow": [
