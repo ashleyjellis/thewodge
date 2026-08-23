@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
@@ -26,7 +26,7 @@ import { money, percent } from '@/lib/format'
 import { FilterPill } from '@/components/app/FilterPill'
 import { NavLink } from '@/components/NavLink'
 
-const insightsSeo = seo({
+const insightsSeo = surfaceSeo('app', {
   title: `Insights — ${SITE_NAME}`,
   description: "What's notable about your plan, read off your own numbers.",
   path: '/app/insights',
@@ -35,7 +35,7 @@ const insightsSeo = seo({
 export const Route = createFileRoute('/app/insights')({
   head: () => ({
     links: insightsSeo.links,
-    meta: [...insightsSeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: insightsSeo.meta,
   }),
   component: Insights,
 })

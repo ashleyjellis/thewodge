@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { DOWN_YEAR_RATE, SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
@@ -46,7 +46,7 @@ import { NavLink } from '@/components/NavLink'
 
 const DOWN_YEAR_OPTIONS = [0, 1, 2, 3, 5]
 
-const planSeo = seo({
+const planSeo = surfaceSeo('app2', {
   title: `Plan — ${SITE_NAME}`,
   description: 'Your plan, how reality is tracking against it, and a deliberate way to replan.',
   path: '/app2/plan',
@@ -55,7 +55,7 @@ const planSeo = seo({
 export const Route = createFileRoute('/app2/plan')({
   head: () => ({
     links: planSeo.links,
-    meta: [...planSeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: planSeo.meta,
   }),
   component: Plan,
 })

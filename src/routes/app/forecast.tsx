@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
@@ -31,7 +31,7 @@ import { FilterPill } from '@/components/app/FilterPill'
 import { ScenariosTable } from '@/components/app/ScenariosTable'
 import { NavLink } from '@/components/NavLink'
 
-const forecastSeo = seo({
+const forecastSeo = surfaceSeo('app', {
   title: `Forecast — ${SITE_NAME}`,
   description: 'Your plan, how reality is tracking against it, and a deliberate way to replan.',
   path: '/app/forecast',
@@ -40,7 +40,7 @@ const forecastSeo = seo({
 export const Route = createFileRoute('/app/forecast')({
   head: () => ({
     links: forecastSeo.links,
-    meta: [...forecastSeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: forecastSeo.meta,
   }),
   component: Forecast,
 })

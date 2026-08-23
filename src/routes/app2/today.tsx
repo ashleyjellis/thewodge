@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
@@ -26,7 +26,7 @@ import { DownMarketReassurance } from '@/components/app/DownMarketReassurance'
 import { ExtraContributionShortcut } from '@/components/app/ExtraContributionShortcut'
 import { MarginalValueCalculator } from '@/components/app/MarginalValueCalculator'
 
-const todaySeo = seo({
+const todaySeo = surfaceSeo('app2', {
   title: `Today — ${SITE_NAME}`,
   description: 'Your household, at a glance.',
   path: '/app2/today',
@@ -38,7 +38,7 @@ export const Route = createFileRoute('/app2/today')({
   }),
   head: () => ({
     links: todaySeo.links,
-    meta: [...todaySeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: todaySeo.meta,
   }),
   component: Today,
 })

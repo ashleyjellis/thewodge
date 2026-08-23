@@ -4,7 +4,7 @@
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
@@ -16,7 +16,7 @@ import { CheckpointTimeline } from '@/components/app/CheckpointTimeline'
 import { FinancialDiary } from '@/components/app/FinancialDiary'
 import { DiaryParseInput } from '@/components/app/DiaryParseInput'
 
-const accountsSeo = seo({
+const accountsSeo = surfaceSeo('app2', {
   title: `Accounts — ${SITE_NAME}`,
   description: 'Set up the real accounts that make up your wealth.',
   path: '/app2/accounts',
@@ -25,7 +25,7 @@ const accountsSeo = seo({
 export const Route = createFileRoute('/app2/accounts')({
   head: () => ({
     links: accountsSeo.links,
-    meta: [...accountsSeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: accountsSeo.meta,
   }),
   component: Accounts,
 })

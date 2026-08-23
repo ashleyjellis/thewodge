@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { useHousehold } from '@/state/useHousehold'
 import { useAccounts } from '@/state/useAccounts'
 import { useSnapshots } from '@/state/useSnapshots'
@@ -22,7 +22,7 @@ import { AccountHistoryCard, type HistoryPeriod } from '@/components/app/Account
 import { GrowthDiary } from '@/components/app/GrowthDiary'
 import { FilterPill } from '@/components/app/FilterPill'
 
-const growthSeo = seo({
+const growthSeo = surfaceSeo('app', {
   title: `Growth — ${SITE_NAME}`,
   description: 'Update your balances and see what you put in against what the market added.',
   path: '/app/growth',
@@ -31,7 +31,7 @@ const growthSeo = seo({
 export const Route = createFileRoute('/app/growth')({
   head: () => ({
     links: growthSeo.links,
-    meta: [...growthSeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: growthSeo.meta,
   }),
   component: Growth,
 })

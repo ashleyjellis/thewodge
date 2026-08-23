@@ -1,0 +1,39 @@
+{
+  "surfaces": [
+    {
+      "id": "app",
+      "label": "App (v1)",
+      "basePath": "/app",
+      "visible": false,
+      "indexable": false,
+      "nav": []
+    },
+    {
+      "id": "app2",
+      "label": "App (v2)",
+      "basePath": "/app2",
+      "visible": false,
+      "indexable": false,
+      "nav": []
+    },
+    {
+      "id": "archive",
+      "label": "Pricing archive",
+      "basePath": "/archive",
+      "visible": false,
+      "indexable": false,
+      "nav": []
+    },
+    {
+      "id": "performance",
+      "label": "Performance",
+      "basePath": "/performance",
+      "visible": true,
+      "indexable": false,
+      "nav": []
+    }
+  ],
+  "alwaysDisallow": [
+    "/results"
+  ]
+}

@@ -4,10 +4,10 @@
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { SITE_NAME } from '@/config'
-import { seo } from '@/lib/seo'
+import { surfaceSeo } from '@/lib/surfaceSeo'
 import { DashboardBody } from '@/components/app/DashboardBody'
 
-const dashboardSeo = seo({
+const dashboardSeo = surfaceSeo('app', {
   title: `Dashboard — ${SITE_NAME}`,
   description: 'Your household, at a glance.',
   path: '/app/dashboard',
@@ -16,7 +16,7 @@ const dashboardSeo = seo({
 export const Route = createFileRoute('/app/dashboard')({
   head: () => ({
     links: dashboardSeo.links,
-    meta: [...dashboardSeo.meta, { name: 'robots', content: 'noindex' }],
+    meta: dashboardSeo.meta,
   }),
   component: () => <DashboardBody accountsPath="/app/accounts" />,
 })

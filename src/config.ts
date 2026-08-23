@@ -57,3 +57,77 @@ export const ANALYTICS_DOMAIN = import.meta.env?.VITE_ANALYTICS_DOMAIN ?? ''
 /** Self-hostable Plausible script src; defaults to the hosted script. */
 export const ANALYTICS_SRC =
   import.meta.env?.VITE_ANALYTICS_SRC ?? 'https://plausible.io/js/script.js'
+
+// ── Surfaces (experiments and product areas) ─────────────────────────────────
+//
+// The site carries several parallel product experiments at once, and the
+// intention is to try directions and ship one. `src/surfaces.json` is the
+// single list that decides, for each of them, whether it appears in
+// navigation and whether search engines may index it. Three things read that
+// list — this module, the nav in SiteHeader, and robots.txt generation in
+// scripts/seo.mjs — so those three can never drift apart. JSON rather than a
+// .ts module specifically so the Node build scripts can read the same file
+// the app does.
+//
+// "Hidden" means hidden, not gone: a hidden surface disappears from
+// navigation, the sitemap and search, but its URLs still resolve, so a link
+// can be shared or a surface checked in production. That is a deliberate
+// choice, and it is why robots.txt carrying an explicit rule per surface is
+// the real protection here rather than a belt-and-braces extra.
+
+import surfacesJson from './surfaces.json'
+
+export type SurfaceId = 'app' | 'app2' | 'archive' | 'performance'
+
+export type SurfaceNavItem = { to: string; label: string }
+
+export type Surface = {
+  id: SurfaceId
+  label: string
+  /** URL prefix owned by this surface — also what robots.txt disallows */
+  basePath: string
+  /** appears in site navigation */
+  visible: boolean
+  /** may be indexed; false adds a noindex meta and a robots.txt Disallow */
+  indexable: boolean
+  /** dropdown entries; a visible surface with none renders no menu */
+  nav: SurfaceNavItem[]
+}
+
+/**
+ * Per-surface visibility overrides, so a surface can be turned on or off for
+ * one environment without a code change: VITE_SURFACE_OVERRIDES="app2=on,archive=off".
+ *
+ * One variable holding both directions rather than separate allow and deny
+ * lists — with two lists there is always a question of which one wins when a
+ * surface appears in both, and no answer to it that anyone remembers.
+ */
+function parseOverrides(raw: string): Partial<Record<SurfaceId, boolean>> {
+  const overrides: Partial<Record<SurfaceId, boolean>> = {}
+  for (const pair of raw.split(',')) {
+    const [id, state] = pair.split('=').map((s) => s.trim())
+    if (!id || !state) continue
+    overrides[id as SurfaceId] = state === 'on' || state === 'true' || state === '1'
+  }
+  return overrides
+}
+
+const SURFACE_OVERRIDES = parseOverrides(import.meta.env?.VITE_SURFACE_OVERRIDES ?? '')
+
+export const SURFACES: Surface[] = (surfacesJson.surfaces as Surface[]).map((surface) => ({
+  ...surface,
+  visible: SURFACE_OVERRIDES[surface.id] ?? surface.visible,
+}))
+
+export function getSurface(id: SurfaceId): Surface | undefined {
+  return SURFACES.find((s) => s.id === id)
+}
+
+export function isSurfaceVisible(id: SurfaceId): boolean {
+  return getSurface(id)?.visible ?? false
+}
+
+/** Surfaces that belong in navigation — visible, and with somewhere to go. */
+export function navigableSurfaces(): Surface[] {
+  return SURFACES.filter((s) => s.visible && s.nav.length > 0)
+}
