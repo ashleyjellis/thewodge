@@ -156,3 +156,8 @@ export async function readingsForPortfolios(db: TrackerDb, portfolioIds: number[
   if (portfolioIds.length === 0) return []
   return db.select().from(readings).where(inArray(readings.portfolioId, portfolioIds))
 }
+
+export async function flowsForPortfolios(db: TrackerDb, portfolioIds: number[]) {
+  if (portfolioIds.length === 0) return []
+  return db.select().from(flows).where(inArray(flows.portfolioId, portfolioIds))
+}

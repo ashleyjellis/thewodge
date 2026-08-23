@@ -2,7 +2,9 @@
  * Portfolio reads for the admin panel and the public pages.
  */
 import { and, desc, eq } from 'drizzle-orm'
+import type { DirectoryInput } from '../../lib/tracker/directory.js'
 import type { TrackerDb } from './client.js'
+import { flowsForPortfolios, readingsForPortfolios } from './readings.js'
 import { portfolios, providers, readings } from './schema.js'
 
 export type PortfolioRow = typeof portfolios.$inferSelect
@@ -53,6 +55,68 @@ export async function findPortfolio(
     providerSlug: row.provider.slug,
     isDemo: row.provider.isDemo,
   }
+}
+
+/**
+ * Everything the public index needs, in three queries rather than three per
+ * portfolio.
+ *
+ * The index summarises every active portfolio, and the obvious shape — loop
+ * the list, fetch each one's readings and flows — is one round trip per
+ * portfolio per table. Against Turso those are network calls, and the seed
+ * script already demonstrated what that costs: the same n+1 pattern took over
+ * seven minutes there before it was batched into single statements.
+ *
+ * So: one query for the portfolios, one for every reading, one for every
+ * flow, then grouped in memory. Returns the engine's input shape rather than
+ * a summary, because the arithmetic belongs in src/lib/tracker where it can
+ * be tested without a database.
+ */
+export async function directoryInputs(db: TrackerDb): Promise<DirectoryInput[]> {
+  const active = await listActivePortfolios(db)
+  if (active.length === 0) return []
+
+  const ids = active.map((portfolio) => portfolio.id)
+  const [allReadings, allFlows] = await Promise.all([
+    readingsForPortfolios(db, ids),
+    flowsForPortfolios(db, ids),
+  ])
+
+  const readingsBy = new Map<number, DirectoryInput['readings']>()
+  for (const reading of allReadings) {
+    const list = readingsBy.get(reading.portfolioId) ?? []
+    list.push({ valuationDate: reading.valuationDate, valuePence: reading.valuePence })
+    readingsBy.set(reading.portfolioId, list)
+  }
+
+  const flowsBy = new Map<number, DirectoryInput['flows']>()
+  for (const flow of allFlows) {
+    const list = flowsBy.get(flow.portfolioId) ?? []
+    list.push({
+      effectiveDate: flow.effectiveDate,
+      amountPence: flow.amountPence,
+      kind: flow.kind,
+    })
+    flowsBy.set(flow.portfolioId, list)
+  }
+
+  return active.map((portfolio) => ({
+    providerSlug: portfolio.providerSlug,
+    providerName: portfolio.providerName,
+    slug: portfolio.slug,
+    name: portfolio.name,
+    riskLabel: portfolio.providerRiskLabel,
+    wrapper: portfolio.wrapper,
+    styleFamily: portfolio.styleFamily,
+    inceptionDate: portfolio.inceptionDate,
+    initialPence: portfolio.initialPence,
+    // buildSeries sorts internally, but the ordering is not guaranteed by the
+    // batched read the way the per-portfolio query's ORDER BY guaranteed it.
+    readings: (readingsBy.get(portfolio.id) ?? []).sort((a, b) =>
+      a.valuationDate.localeCompare(b.valuationDate),
+    ),
+    flows: flowsBy.get(portfolio.id) ?? [],
+  }))
 }
 
 /** The most recent reading per portfolio — what the weekly grid compares against. */

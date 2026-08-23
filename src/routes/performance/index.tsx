@@ -1,12 +1,31 @@
 /**
- * The portfolio index. Deliberately plain for now — search and the method
- * page land with T6; this exists so the Performance menu has somewhere real
- * to go rather than pointing at a page that does not yet render.
+ * The portfolio index — every tracked portfolio, searchable and sortable.
+ *
+ * The list is filtered and sorted in the browser rather than by the server.
+ * At this size that is not a shortcut: there are tens of portfolios, not
+ * thousands, and typing into a box that answers on the keystroke is a
+ * materially better experience than one that answers after a round trip. If
+ * the list ever outgrows that, the pure functions behind it move server-side
+ * unchanged.
+ *
+ * A portfolio too new to have a publishable return shows its reading count
+ * instead of a figure. See src/lib/tracker/directory.ts for why that matters
+ * more here than on the portfolio's own page.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { Search } from 'lucide-react'
 import { SITE_NAME } from '@/config'
 import { surfaceSeo } from '@/lib/surfaceSeo'
+import { cn } from '@/lib/cn'
+import { formatReturn } from '@/lib/tracker/money'
+import {
+  filterPortfolios,
+  sortPortfolios,
+  SORT_LABELS,
+  type PortfolioSummary,
+  type SortKey,
+} from '@/lib/tracker/directory'
 import { MaxWidthContainer } from '@/components/site/Container'
 import { NavLink } from '@/components/NavLink'
 import { DemoBanner } from '@/components/tracker/DemoBanner'
@@ -23,15 +42,6 @@ export const Route = createFileRoute('/performance/')({
   },
   component: PerformanceIndex,
 })
-
-type Row = {
-  providerSlug: string
-  providerName: string
-  slug: string
-  name: string
-  riskLabel: string | null
-  inceptionDate: string
-}
 
 /**
  * One message per cause, each naming the single command that fixes it.
@@ -57,9 +67,65 @@ const FAILURE_COPY: Record<string, { title: string; body: string }> = {
   },
 }
 
+const SORT_KEYS: SortKey[] = ['provider', 'return', 'running']
+
+function Meta({ children }: { children: React.ReactNode }) {
+  return <span className="text-[13px] text-muted-foreground">{children}</span>
+}
+
+function PortfolioCard({ row }: { row: PortfolioSummary }) {
+  return (
+    <NavLink
+      to={`/performance/p/${row.providerSlug}/${row.slug}`}
+      className="flex items-baseline justify-between gap-6 rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:border-foreground/30"
+    >
+      <span className="min-w-0">
+        <span className="block truncate text-[15px] font-medium text-foreground">
+          {row.providerName} · {row.name}
+        </span>
+        <span className="mt-1 block">
+          <Meta>
+            {[
+              row.riskLabel ? `Risk ${row.riskLabel}` : null,
+              row.wrapper ? row.wrapper.toUpperCase() : null,
+              `${row.weeksRunning} week${row.weeksRunning === 1 ? '' : 's'}`,
+              row.lastValuationDate ? `last read ${row.lastValuationDate}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </Meta>
+        </span>
+      </span>
+
+      <span className="shrink-0 text-right">
+        {row.returnFraction === null ? (
+          <>
+            {/* No figure at all, rather than a figure with a caveat beside
+                it. A number printed here is the thing that gets remembered. */}
+            <span className="block text-[15px] tabular-nums text-muted-foreground">
+              {row.readingCount} reading{row.readingCount === 1 ? '' : 's'}
+            </span>
+            <span className="mt-1 block text-[12px] text-muted-foreground/80">too early</span>
+          </>
+        ) : (
+          // What the figure means is stated once above the list rather than
+          // repeated on all eighteen rows, where it would read as decoration
+          // and stop being read at all. "Too early" stays on the row, because
+          // that one is about the row and not about the column.
+          <span className="block text-[19px] tabular-nums text-foreground">
+            {formatReturn(row.returnFraction)}
+          </span>
+        )}
+      </span>
+    </NavLink>
+  )
+}
+
 function PerformanceIndex() {
-  const [rows, setRows] = useState<Row[] | null>(null)
+  const [rows, setRows] = useState<PortfolioSummary[] | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortKey>('provider')
 
   useEffect(() => {
     // An empty list and a failed request are different facts and must not
@@ -81,10 +147,13 @@ function PerformanceIndex() {
       })
   }, [])
 
-  const byProvider = (rows ?? []).reduce<Record<string, Row[]>>((acc, row) => {
-    ;(acc[row.providerName] ??= []).push(row)
-    return acc
-  }, {})
+  const visible = useMemo(
+    () => sortPortfolios(filterPortfolios(rows ?? [], query), sort),
+    [rows, query, sort],
+  )
+
+  const total = rows?.length ?? 0
+  const isSearching = query.trim().length > 0
 
   return (
     <>
@@ -99,7 +168,14 @@ function PerformanceIndex() {
         <p className="mt-3 max-w-[60ch] text-[15px] leading-relaxed text-muted-foreground">
           Real money, in real accounts, read by hand from each provider's own screen every week.
           Nobody publishes this, so it is published here — including the falls, which is the part
-          most performance pages leave out.
+          most performance pages leave out.{' '}
+          <NavLink
+            to="/performance/method"
+            className="text-foreground underline underline-offset-2"
+          >
+            How this is measured
+          </NavLink>
+          .
         </p>
 
         {rows === null ? (
@@ -113,7 +189,7 @@ function PerformanceIndex() {
               {FAILURE_COPY[failure]?.body ?? FAILURE_COPY.unavailable!.body}
             </p>
           </div>
-        ) : rows.length === 0 ? (
+        ) : total === 0 ? (
           <div className="mt-10 rounded-2xl border border-border bg-card p-6">
             <p className="text-[15px] font-medium text-foreground">No portfolios tracked yet.</p>
             <p className="mt-2 max-w-[60ch] text-[14px] text-muted-foreground">
@@ -123,29 +199,69 @@ function PerformanceIndex() {
             </p>
           </div>
         ) : (
-          <div className="mt-10 space-y-8">
-            {Object.entries(byProvider).map(([providerName, portfolios]) => (
-              <div key={providerName}>
-                <h2 className="text-[16px] font-semibold text-foreground">{providerName}</h2>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {portfolios.map((portfolio) => (
-                    <NavLink
-                      key={`${portfolio.providerSlug}/${portfolio.slug}`}
-                      to={`/performance/p/${portfolio.providerSlug}/${portfolio.slug}`}
-                      className="rounded-2xl border border-border bg-card p-4 transition-colors hover:border-foreground/30"
-                    >
-                      <span className="block text-[14px] font-medium text-foreground">
-                        {portfolio.name}
-                      </span>
-                      <span className="mt-1 block text-[13px] text-muted-foreground">
-                        Risk {portfolio.riskLabel ?? '—'} · since {portfolio.inceptionDate}
-                      </span>
-                    </NavLink>
-                  ))}
-                </div>
+          <>
+            <div className="mt-10 flex flex-wrap items-center gap-3">
+              <div className="relative min-w-0 flex-1 sm:max-w-sm">
+                <Search
+                  size={15}
+                  strokeWidth={2.25}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search provider, portfolio, risk level…"
+                  aria-label="Search portfolios"
+                  className="w-full rounded-full border border-border bg-card py-2.5 pl-10 pr-4 text-[14px] text-foreground placeholder:text-muted-foreground focus:border-foreground/40 focus:outline-none"
+                />
               </div>
-            ))}
-          </div>
+
+              <div className="flex items-center gap-1" role="group" aria-label="Sort portfolios">
+                {SORT_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={sort === key}
+                    onClick={() => setSort(key)}
+                    className={cn(
+                      'rounded-full px-3.5 py-2 text-[13px] transition-colors',
+                      sort === key
+                        ? 'bg-foreground text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                  >
+                    {SORT_LABELS[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="mt-4 text-[13px] text-muted-foreground" aria-live="polite">
+              {isSearching
+                ? `${visible.length} of ${total} portfolio${total === 1 ? '' : 's'}`
+                : `${total} portfolio${total === 1 ? '' : 's'}`}
+              {' · returns since inception, gross of platform fees'}
+            </p>
+
+            {visible.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-border bg-card p-6">
+                <p className="text-[15px] font-medium text-foreground">
+                  Nothing matches “{query.trim()}”.
+                </p>
+                <p className="mt-2 text-[14px] text-muted-foreground">
+                  Search covers provider and portfolio names, risk labels, wrappers and style.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 space-y-2">
+                {visible.map((row) => (
+                  <PortfolioCard key={`${row.providerSlug}/${row.slug}`} row={row} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </MaxWidthContainer>
     </>

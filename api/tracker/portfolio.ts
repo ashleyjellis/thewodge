@@ -8,10 +8,19 @@
  * the same numbers computed in two places, which is how two places start
  * disagreeing.
  *
- * GET /api/tracker/portfolio (no params) lists every portfolio, for the index.
+ * GET /api/tracker/portfolio (no params) returns a summary per portfolio, for
+ * the index. Summarised server-side, unlike the page above, because the index
+ * has no live controls to re-derive against — one since-inception figure per
+ * row, and sending a year of readings for every portfolio to compute it in
+ * the browser would be a much larger payload for the same answer.
  */
 import { getTrackerDb } from '../../src/server/trackerDb/client.js'
-import { findPortfolio, listActivePortfolios } from '../../src/server/trackerDb/portfolios.js'
+import {
+  directoryInputs,
+  findPortfolio,
+  listActivePortfolios,
+} from '../../src/server/trackerDb/portfolios.js'
+import { summarisePortfolio } from '../../src/lib/tracker/directory.js'
 import { listReadings } from '../../src/server/trackerDb/readings.js'
 import { flows as flowsTable } from '../../src/server/trackerDb/schema.js'
 import { eq } from 'drizzle-orm'
@@ -41,19 +50,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const portfolioSlug = single(req.query?.portfolio)
 
     if (!providerSlug || !portfolioSlug) {
-      const all = await listActivePortfolios(db)
+      const inputs = await directoryInputs(db)
       res.status(200).json({
         ok: true,
-        portfolios: all.map((portfolio) => ({
-          providerSlug: portfolio.providerSlug,
-          providerName: portfolio.providerName,
-          slug: portfolio.slug,
-          name: portfolio.name,
-          riskLabel: portfolio.providerRiskLabel,
-          wrapper: portfolio.wrapper,
-          inceptionDate: portfolio.inceptionDate,
-          isDemo: portfolio.isDemo,
-        })),
+        portfolios: inputs.map((input) => summarisePortfolio(input)),
       })
       return
     }
