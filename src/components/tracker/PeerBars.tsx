@@ -84,7 +84,18 @@ export function PeerBars({
                 <span
                   className={cn(
                     'absolute top-0 h-full',
-                    row.isSelf ? 'bg-foreground' : 'bg-accent',
+                    // Direction has to be legible without reading the number
+                    // beside it. The geometry already puts a loss left of the
+                    // zero line, but a loss and a gain drawn in one fill are
+                    // told apart only by which side of a hairline they start
+                    // on — which is not a difference anyone registers while
+                    // scanning. A negative bar is outlined rather than solid,
+                    // so it reads as absence against the solid gains.
+                    row.value !== null && row.value < 0
+                      ? 'border border-foreground/45 bg-foreground/10'
+                      : row.isSelf
+                        ? 'bg-foreground'
+                        : 'bg-accent',
                   )}
                   style={{ left: `${geometry.leftPct}%`, width: `${geometry.widthPct}%` }}
                 />

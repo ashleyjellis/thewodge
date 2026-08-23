@@ -26,6 +26,8 @@ import { flows as flowsTable } from '../../../src/server/trackerDb/schema.js'
 import { eq } from 'drizzle-orm'
 import { buildSeries } from '../../../src/lib/tracker/series.js'
 import { timeWeightedReturn } from '../../../src/lib/tracker/returns.js'
+import { analyseDrawdown } from '../../../src/lib/tracker/drawdown.js'
+import { daysBetween } from '../../../src/lib/tracker/dates.js'
 import { classifyDbFailure } from '../../../src/server/trackerDb/errors.js'
 import {
   methodNotAllowed,
@@ -73,8 +75,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     // documented fallback until there is enough history for relative
     // volatility. The page says so rather than implying a common scale that
     // does not exist between firms.
+    //
+    // This portfolio is deliberately NOT in the list. It used to be, computed
+    // here exactly as its siblings were — which meant the page carried two
+    // independent calculations of one number, and they disagreed the moment
+    // the fee toggle moved, because only one of them knew about it. The page
+    // inserts its own row from the view it already has, so there is one
+    // calculation and nothing to fall out of step.
     const siblings = (await listActivePortfolios(db)).filter(
-      (candidate) => candidate.providerRiskLabel === portfolio.providerRiskLabel,
+      (candidate) =>
+        candidate.providerRiskLabel === portfolio.providerRiskLabel &&
+        candidate.id !== portfolio.id,
     )
     const peers = await Promise.all(
       siblings.map(async (sibling) => {
@@ -88,10 +99,21 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
           readings: siblingReadings,
           flows: siblingFlows,
         })
+        const last = series[series.length - 1]
         return {
           label: `${sibling.providerName} · ${sibling.name}`,
+          providerSlug: sibling.providerSlug,
+          slug: sibling.slug,
+          // Gross. The page applies each peer's own fee at the balance the
+          // reader chose, so that every figure in the block gets the same
+          // treatment as the headline.
           returnFraction: timeWeightedReturn(series) ?? 0,
-          isSelf: sibling.id === portfolio.id,
+          isSelf: false,
+          days: last ? Math.max(0, daysBetween(sibling.inceptionDate, last.onDate)) : 0,
+          platformFeeBps: sibling.platformFeeBps,
+          feeTiersJson: sibling.feeTiersJson,
+          providerRiskLabel: sibling.providerRiskLabel,
+          maxDrawdown: analyseDrawdown(series).maxDrawdown,
         }
       }),
     )

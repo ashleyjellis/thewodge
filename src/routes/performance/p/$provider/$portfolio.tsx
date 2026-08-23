@@ -26,7 +26,10 @@ import { DemoBanner } from '@/components/tracker/DemoBanner'
 import { SeriesChart } from '@/components/tracker/SeriesChart'
 import { PeerBars } from '@/components/tracker/PeerBars'
 import {
+  buildLedgerRows,
   buildProviderPageView,
+  netPeerReturn,
+  peerFeeBps,
   summarisePeerBand,
   type Peer,
 } from '@/lib/tracker/providerPage'
@@ -176,6 +179,49 @@ function ProviderPage() {
     })
   }, [data, feesDeducted, modelledBalancePence])
 
+  /**
+   * The band, with this portfolio's row taken from the view rather than
+   * recomputed.
+   *
+   * That is the whole point: the headline and the "This portfolio" bar are
+   * now the same number because they are the same value, not because two
+   * calculations happen to agree. The API no longer returns a row for this
+   * portfolio at all.
+   *
+   * Peers get their own fee applied at the reader's modelled balance, in step
+   * with the toggle, so the block never compares this one net against the
+   * others gross.
+   */
+  const peers = useMemo<Peer[]>(() => {
+    if (!data || !view || view.twr === null) return []
+    const others = data.peers.map((peer) => ({
+      ...peer,
+      returnFraction: feesDeducted
+        ? netPeerReturn(peer.returnFraction, peerFeeBps(peer, modelledBalancePence), peer.days ?? 0)
+        : peer.returnFraction,
+    }))
+    return [
+      {
+        label: 'This portfolio',
+        returnFraction: view.twr,
+        isSelf: true,
+        providerSlug: provider,
+        slug: portfolio,
+      },
+      ...others,
+    ]
+  }, [data, view, feesDeducted, modelledBalancePence, provider, portfolio])
+
+  const peerSummary = useMemo(
+    () => summarisePeerBand(peers, 'provider_risk_label'),
+    [peers],
+  )
+
+  const ledgerRows = useMemo(
+    () => (data && view ? buildLedgerRows(view.series, data.readings, view.scale) : []),
+    [data, view],
+  )
+
   if (error) {
     return (
       <MaxWidthContainer className="py-20">
@@ -191,7 +237,6 @@ function ProviderPage() {
     )
   }
 
-  const peerSummary = summarisePeerBand(data.peers, 'provider_risk_label')
   const { drawdown } = view
 
   return (
@@ -367,10 +412,18 @@ function ProviderPage() {
               rows={[
                 { label: 'This portfolio', value: peerSummary.self, isSelf: true },
                 { label: `Band average (${peerSummary.count})`, value: peerSummary.average, isSelf: false },
-                { label: 'Widest in band', value: peerSummary.widest, isSelf: false },
-                { label: 'Narrowest in band', value: peerSummary.narrowest, isSelf: false },
+                // Highest and Lowest, not Widest and Narrowest: these are the
+                // best and worst returns in the band, and "widest" describes
+                // a spread, which is a different quantity entirely.
+                { label: 'Highest in band', value: peerSummary.widest, isSelf: false },
+                { label: 'Lowest in band', value: peerSummary.narrowest, isSelf: false },
               ]}
             />
+            <p className="mt-4 text-[13px] text-muted-foreground">
+              {feesDeducted
+                ? 'Every figure here is after each provider’s own platform fee at the balance you set, so the comparison is like for like.'
+                : 'Every figure here is before platform fees. Switch the fee toggle above and the whole block moves with it.'}
+            </p>
           </section>
         ) : null}
 
@@ -388,9 +441,12 @@ function ProviderPage() {
             </a>
           </div>
           <p className="mt-2 max-w-[62ch] text-[14px] text-muted-foreground">
-            Every reading, in the order it was taken. The unit price is value divided by units held,
-            so paying money in adds units without moving the price. The CSV carries the same
-            integers this page is drawn from, so any figure here can be checked against it.
+            Every reading, in the order it was taken, starting from the opening position. The unit
+            price is value divided by units held, so paying money in adds units without moving the
+            price. Values are shown at the {formatPence(modelledBalancePence)} balance set above,
+            not at the size of the real account — the unit price is the same either way. The CSV
+            carries the real integers this page is drawn from, so any figure here can be checked
+            against it.
           </p>
           <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
             <table className="w-full min-w-[600px] text-[13px]">
@@ -399,42 +455,49 @@ function ProviderPage() {
                   <th className="px-4 py-3 font-medium">Valued</th>
                   <th className="px-4 py-3 font-medium">Read on</th>
                   <th className="px-4 py-3 text-right font-medium">Unit price</th>
-                  <th className="px-4 py-3 text-right font-medium">Value</th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    Value at {formatPence(modelledBalancePence)}
+                  </th>
                   <th className="px-4 py-3 text-right font-medium">Week</th>
                   <th className="px-4 py-3 font-medium">Source</th>
                 </tr>
               </thead>
               <tbody>
-                {view.series
-                  .filter((point) => !point.isOpening)
-                  .map((point, index, all) => {
-                    const previous = all[index - 1]
-                    const weekMove =
-                      previous && previous.unitPriceMicro > 0
-                        ? point.unitPriceMicro / previous.unitPriceMicro - 1
-                        : null
-                    const reading = data.readings.find((r) => r.valuationDate === point.onDate)
-                    return (
-                      <tr key={point.onDate} className="border-b border-border/40 last:border-0">
-                        <td className="px-4 py-2.5 tabular-nums">{point.onDate}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">
-                          {reading ? reading.readAt.slice(0, 10) : '—'}
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">
-                          {formatUnitPrice(point.unitPriceMicro)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">
-                          {formatPence(point.valuePence)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">
-                          {weekMove === null ? '—' : formatReturn(weekMove)}
-                        </td>
-                        <td className="px-4 py-2.5 text-muted-foreground">
-                          {point.isForwardFilled ? 'no reading — carried forward' : (reading?.source ?? '—')}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                {/* The opening position is included. Without it the table
+                    starts at the first observation, and anyone dividing the
+                    last unit price by the first one gets a return that
+                    disagrees with the headline — the page failing its own
+                    arithmetic in front of a reader who checked it. */}
+                {ledgerRows.map((row) => (
+                  <tr
+                    key={row.onDate}
+                    className={cn(
+                      'border-b border-border/40 last:border-0',
+                      // A starting position, not an observation. Nobody read
+                      // it off a screen, and it should not sit in the table
+                      // looking like the others did.
+                      row.isOpening && 'bg-muted/40 text-muted-foreground',
+                    )}
+                  >
+                    <td className="px-4 py-2.5 tabular-nums">
+                      {row.onDate}
+                      {row.isOpening ? (
+                        <span className="ml-2 text-[11px] uppercase tracking-[0.08em]">opened</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{row.readOn ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {formatUnitPrice(row.unitPriceMicro)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {formatPence(row.scaledValuePence)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {row.weekMove === null ? '—' : formatReturn(row.weekMove)}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{row.source}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
