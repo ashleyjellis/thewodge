@@ -27,7 +27,7 @@ on:
         description: "What to run"
         required: true
         type: choice
-        options: [both, migrate, seed, seed-providers-only]
+        options: [both, migrate, seed, seed-providers-only, seed-demo, seed-demo-reset]
         default: both
 
 concurrency:
@@ -110,6 +110,23 @@ jobs:
       - name: Seed providers only
         if: inputs.database == 'archive' && inputs.action == 'seed-providers-only'
         run: python -m pipeline.seed --providers
+
+      # The tracker's demo dataset. Only ever on an explicitly chosen action,
+      # never as part of "both", so it cannot be run by accident.
+      #
+      # Safe to run from here because the seed refuses in three separate ways:
+      # when VITE_DEMO_MODE is 0, when the database holds any provider not
+      # marked as demo, and when demo data already exists without --reset. The
+      # second is the one that matters — environment variables get
+      # misconfigured, while the presence of a real published record is a fact
+      # about the database itself.
+      - name: Seed the tracker demo dataset
+        if: inputs.database == 'tracker' && inputs.action == 'seed-demo'
+        run: pnpm tracker:seed:demo
+
+      - name: Replace the tracker demo dataset
+        if: inputs.database == 'tracker' && inputs.action == 'seed-demo-reset'
+        run: pnpm tracker:seed:reset
 
       # Reported into the run summary so the outcome is visible without
       # digging through logs, and so a run that silently did nothing is
