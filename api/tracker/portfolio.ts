@@ -17,9 +17,9 @@ import { flows as flowsTable } from '../../src/server/trackerDb/schema.js'
 import { eq } from 'drizzle-orm'
 import { buildSeries } from '../../src/lib/tracker/series.js'
 import { timeWeightedReturn } from '../../src/lib/tracker/returns.js'
+import { classifyDbFailure } from '../../src/server/trackerDb/errors.js'
 import {
   methodNotAllowed,
-  serverError,
   type ApiRequest,
   type ApiResponse,
 } from '../_lib/http.js'
@@ -131,6 +131,13 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       peers,
     })
   } catch (err) {
-    serverError(res, err)
+    // Logged in full here; only the classification is returned, since the
+    // underlying message can carry connection strings.
+    console.error('[api/tracker/portfolio]', err)
+    res.status(500).json({
+      ok: false,
+      error: 'the tracker database could not be read',
+      reason: classifyDbFailure(err),
+    })
   }
 }

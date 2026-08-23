@@ -33,9 +33,33 @@ type Row = {
   inceptionDate: string
 }
 
+/**
+ * One message per cause, each naming the single command that fixes it.
+ * Listing every possible cause and asking the reader to work out which one
+ * applies is only marginally more useful than saying nothing.
+ */
+const FAILURE_COPY: Record<string, { title: string; body: string }> = {
+  not_migrated: {
+    title: 'The tracker database has no tables yet.',
+    body: 'It opened, but the schema has never been applied. Run `pnpm tracker:db:migrate`, then `pnpm tracker:seed:demo` to load the demo dataset.',
+  },
+  not_configured: {
+    title: 'The tracker database is not configured.',
+    body: 'This build is running in production mode with no TRACKER_TURSO_DATABASE_URL set. Set that and TRACKER_TURSO_AUTH_TOKEN in the deployment environment. The local-file fallback only exists for development.',
+  },
+  unavailable: {
+    title: 'The tracker database could not be read.',
+    body: 'It is configured but the query failed. Check the server logs for the underlying error — the full message is recorded there rather than shown here.',
+  },
+  unreachable: {
+    title: 'Could not reach the server.',
+    body: 'The request for portfolios did not complete. If this is local development, check that the dev server is still running.',
+  },
+}
+
 function PerformanceIndex() {
   const [rows, setRows] = useState<Row[] | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
 
   useEffect(() => {
     // An empty list and a failed request are different facts and must not
@@ -47,12 +71,12 @@ function PerformanceIndex() {
       .then((payload) => {
         if (payload?.ok) setRows(payload.portfolios)
         else {
-          setFailed(true)
+          setFailure(payload?.reason ?? 'unavailable')
           setRows([])
         }
       })
       .catch(() => {
-        setFailed(true)
+        setFailure('unreachable')
         setRows([])
       })
   }, [])
@@ -80,17 +104,13 @@ function PerformanceIndex() {
 
         {rows === null ? (
           <p className="mt-10 text-[14px] text-muted-foreground">Loading…</p>
-        ) : failed ? (
+        ) : failure ? (
           <div className="mt-10 rounded-2xl border border-border bg-card p-6">
             <p className="text-[15px] font-medium text-foreground">
-              Could not reach the tracker database.
+              {FAILURE_COPY[failure]?.title ?? FAILURE_COPY.unavailable!.title}
             </p>
-            <p className="mt-2 max-w-[60ch] text-[14px] text-muted-foreground">
-              This is a configuration problem rather than an empty record. Locally, run{' '}
-              <code className="rounded bg-muted px-1.5 py-0.5">pnpm tracker:db:migrate</code> then{' '}
-              <code className="rounded bg-muted px-1.5 py-0.5">pnpm tracker:seed:demo</code>. In a
-              deployed environment, check that TRACKER_TURSO_DATABASE_URL and
-              TRACKER_TURSO_AUTH_TOKEN are set.
+            <p className="mt-2 max-w-[62ch] text-[14px] leading-relaxed text-muted-foreground">
+              {FAILURE_COPY[failure]?.body ?? FAILURE_COPY.unavailable!.body}
             </p>
           </div>
         ) : rows.length === 0 ? (
