@@ -55,12 +55,17 @@ export type VolatilityResult = {
 }
 
 /**
- * `readingCount` counts genuine observations, not series points: a
- * forward-filled point contributes a zero return that would drag measured
- * volatility down toward a number the data does not support.
+ * `readingCount` counts genuine observations, not series points.
+ *
+ * Two exclusions, and both matter for a gate whose whole job is to stop a
+ * number being published before the evidence supports it. A forward-filled
+ * point contributes a zero return that drags measured volatility down. And
+ * the opening point is a derived starting position, not something anyone
+ * observed — counting it would let a portfolio with 25 real readings report
+ * 26 and cross the threshold a week early.
  */
 export function annualisedVolatility(points: SeriesPoint[]): VolatilityResult {
-  const readingCount = points.filter((p) => !p.isForwardFilled).length
+  const readingCount = points.filter((p) => !p.isForwardFilled && !p.isOpening).length
   const sufficiency = sufficiencyFor(readingCount)
 
   if (sufficiency === 'insufficient') {

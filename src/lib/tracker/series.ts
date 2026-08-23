@@ -109,6 +109,7 @@ export function buildSeries(input: SeriesInput): SeriesPoint[] {
       unitPriceMicro: priceMicro,
       unitsMicro,
       valuePence: initialPence,
+      isOpening: true,
       isForwardFilled: false,
     },
   ]
@@ -130,6 +131,7 @@ export function buildSeries(input: SeriesInput): SeriesPoint[] {
         unitPriceMicro: priceMicro,
         unitsMicro,
         valuePence: reading.valuePence,
+        isOpening: false,
         isForwardFilled: false,
       })
     } else {
@@ -138,6 +140,7 @@ export function buildSeries(input: SeriesInput): SeriesPoint[] {
         unitPriceMicro: priceMicro,
         unitsMicro,
         valuePence: valueFromUnits(unitsMicro, priceMicro),
+        isOpening: false,
         isForwardFilled: true,
       })
     }

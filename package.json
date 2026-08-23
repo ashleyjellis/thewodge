@@ -19,7 +19,9 @@
     "archive:db:studio": "drizzle-kit studio --config drizzle.archive.config.ts",
     "tracker:db:generate": "drizzle-kit generate --config drizzle.tracker.config.ts",
     "tracker:db:migrate": "tsx scripts/tracker-db-migrate.ts",
-    "tracker:db:studio": "drizzle-kit studio --config drizzle.tracker.config.ts"
+    "tracker:db:studio": "drizzle-kit studio --config drizzle.tracker.config.ts",
+    "tracker:seed:demo": "tsx scripts/tracker-seed-demo.ts",
+    "tracker:seed:reset": "tsx scripts/tracker-seed-demo.ts --reset"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

@@ -27,6 +27,13 @@ export type SeriesPoint = {
   unitsMicro: number
   valuePence: number
   /**
+   * True for the inception point only: the opening position, derived from
+   * initial_pence rather than observed. It is a known value, so it is not
+   * forward-filled — but it is not an observation either, and anything
+   * counting how much evidence exists must not count it as one.
+   */
+  isOpening: boolean
+  /**
    * True when no reading exists for this date and the last known unit price
    * was carried forward. Never an interpolation — the value is what the
    * previous reading implies, not a guess at what happened in between.
