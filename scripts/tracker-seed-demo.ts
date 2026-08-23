@@ -163,77 +163,92 @@ for (const portfolio of dataset.portfolios) {
   const portfolioId = row!.id
   portfolioIdByKey.set(`${portfolio.providerSlug}/${portfolio.slug}`, portfolioId)
 
-  for (const reading of portfolio.readings) {
-    await db.insert(schema.readings).values({
-      portfolioId,
-      valuationDate: reading.valuationDate,
-      // valuation_date and read_at are genuinely different facts and the
-      // schema keeps them apart deliberately: providers quote a value "as
-      // at" a date, and a human reads it off the screen a day or two later.
-      // The demo data reflects that, or the distinction is invisible.
-      readAt: `${addDays(reading.valuationDate, 2)}T09:15:00Z`,
-      valuePence: reading.valuePence,
-      source: reading.source,
-    })
-    readingCount++
+  // Inserted as one statement per portfolio rather than one per row. Against
+  // a local file the difference is invisible; against Turso every insert is a
+  // network round trip, and ~900 of them turns a two-second seed into several
+  // minutes.
+  if (portfolio.readings.length > 0) {
+    await db.insert(schema.readings).values(
+      portfolio.readings.map((reading) => ({
+        portfolioId,
+        valuationDate: reading.valuationDate,
+        // valuation_date and read_at are genuinely different facts and the
+        // schema keeps them apart deliberately: providers quote a value "as
+        // at" a date, and a human reads it off the screen a day or two later.
+        // The demo data reflects that, or the distinction is invisible.
+        readAt: `${addDays(reading.valuationDate, 2)}T09:15:00Z`,
+        valuePence: reading.valuePence,
+        source: reading.source,
+      })),
+    )
+    readingCount += portfolio.readings.length
   }
 
-  for (const flow of portfolio.flows) {
-    await db.insert(schema.flows).values({
-      portfolioId,
-      effectiveDate: flow.effectiveDate,
-      amountPence: flow.amountPence,
-      kind: flow.kind,
-    })
-    flowCount++
+  if (portfolio.flows.length > 0) {
+    await db.insert(schema.flows).values(
+      portfolio.flows.map((flow) => ({
+        portfolioId,
+        effectiveDate: flow.effectiveDate,
+        amountPence: flow.amountPence,
+        kind: flow.kind,
+      })),
+    )
+    flowCount += portfolio.flows.length
   }
 }
 
-for (const holding of dataset.holdings) {
-  const portfolioId = portfolioIdByKey.get(`${holding.providerSlug}/${holding.portfolioSlug}`)
-  if (!portfolioId) continue
-  await db.insert(schema.holdings).values({
-    portfolioId,
-    asOfDate: holding.asOfDate,
-    isin: holding.isin,
-    instrumentName: holding.instrumentName,
-    assetClass: holding.assetClass,
-    region: holding.region,
-    weightBps: holding.weightBps,
+const holdingRows = dataset.holdings
+  .map((holding) => {
+    const portfolioId = portfolioIdByKey.get(`${holding.providerSlug}/${holding.portfolioSlug}`)
+    return portfolioId
+      ? {
+          portfolioId,
+          asOfDate: holding.asOfDate,
+          isin: holding.isin,
+          instrumentName: holding.instrumentName,
+          assetClass: holding.assetClass,
+          region: holding.region,
+          weightBps: holding.weightBps,
+        }
+      : null
   })
-}
+  .filter((row): row is NonNullable<typeof row> => row !== null)
+
+if (holdingRows.length > 0) await db.insert(schema.holdings).values(holdingRows)
 
 for (const benchmark of dataset.benchmarks) {
   const [row] = await db
     .insert(schema.benchmarks)
     .values({ code: benchmark.code, name: benchmark.name })
     .returning({ id: schema.benchmarks.id })
-  for (const reading of benchmark.readings) {
-    await db.insert(schema.benchmarkReadings).values({
-      benchmarkId: row!.id,
-      onDate: reading.onDate,
-      levelMicro: reading.levelMicro,
-    })
+  if (benchmark.readings.length > 0) {
+    await db.insert(schema.benchmarkReadings).values(
+      benchmark.readings.map((reading) => ({
+        benchmarkId: row!.id,
+        onDate: reading.onDate,
+        levelMicro: reading.levelMicro,
+      })),
+    )
   }
 }
 
-for (const note of dataset.notes) {
-  await db.insert(schema.notes).values({
+await db.insert(schema.notes).values(
+  dataset.notes.map((note) => ({
     portfolioId: null,
     publishedAt: note.publishedAt,
     title: note.title,
     bodyMd: note.bodyMd,
     slug: note.slug,
-  })
-}
+  })),
+)
 
-for (const subscriber of dataset.subscribers) {
-  await db.insert(schema.subscribers).values({
+await db.insert(schema.subscribers).values(
+  dataset.subscribers.map((subscriber) => ({
     email: subscriber.email,
     confirmedAt: subscriber.confirmedAt,
     unsubToken: subscriber.unsubToken,
-  })
-}
+  })),
+)
 
 console.log(
   `[tracker-seed] done — ${dataset.providers.length} providers, ` +
