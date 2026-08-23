@@ -20,6 +20,20 @@ function findHandlerFile(root: string, name: string): string | null {
   return null
 }
 
+/**
+ * Handler names may contain a single directory level (api/tracker/readings.ts
+ * serving /api/tracker/readings), which is how the newer product areas keep
+ * their endpoints together instead of crowding the top level. Deeper paths
+ * and any `..` are refused — this only ever runs in dev, but a path that
+ * escapes the api directory is not something to leave open regardless.
+ */
+function isSafeHandlerName(name: string): boolean {
+  if (!name || name.includes('..')) return false
+  const segments = name.split('/')
+  if (segments.length > 2) return false
+  return segments.every((segment) => /^[a-zA-Z0-9_-]+$/.test(segment))
+}
+
 async function readBody(req: NodeJS.ReadableStream): Promise<string> {
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
@@ -35,7 +49,7 @@ export function apiDevMiddleware(): Plugin {
         try {
           const url = new URL(req.url ?? '/', 'http://localhost')
           const name = url.pathname.replace(/^\//, '')
-          if (!name || name.includes('/')) return next()
+          if (!isSafeHandlerName(name)) return next()
 
           const modulePath = findHandlerFile(process.cwd(), name)
           if (!modulePath) return next()
@@ -51,7 +65,7 @@ export function apiDevMiddleware(): Plugin {
           })
 
           await handler(
-            { method: req.method, body, query },
+            { method: req.method, body, query, headers: req.headers },
             {
               status(code: number) {
                 res.statusCode = code
@@ -60,6 +74,9 @@ export function apiDevMiddleware(): Plugin {
               json(payload: unknown) {
                 res.setHeader('content-type', 'application/json')
                 res.end(JSON.stringify(payload))
+              },
+              setHeader(name: string, value: string | string[]) {
+                res.setHeader(name, value)
               },
             },
           )

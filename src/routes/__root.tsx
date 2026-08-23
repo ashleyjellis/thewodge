@@ -51,9 +51,15 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
-  // /app has its own chrome (AppShell) — the marketing SiteHeader/SiteFooter
+  // Working tools carry their own chrome — the marketing SiteHeader/SiteFooter
   // don't belong there.
-  const isApp = useRouterState({ select: (s) => s.location.pathname.startsWith('/app') })
+  const isApp = useRouterState({
+    select: (s) =>
+      s.location.pathname.startsWith('/app') ||
+      // the tracker's admin panel, but not its public pages, which are part
+      // of the site proper and should keep the site's own header and footer
+      s.location.pathname.startsWith('/performance/admin'),
+  })
   return (
     <RootDocument>
       <div className="flex min-h-dvh flex-col">

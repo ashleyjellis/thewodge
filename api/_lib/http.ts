@@ -8,11 +8,50 @@ export type ApiRequest = {
   method?: string
   body?: unknown
   query?: Record<string, string | string[] | undefined>
+  /** lower-cased request headers — needed to read the session cookie */
+  headers?: Record<string, string | string[] | undefined>
 }
 
 export type ApiResponse = {
   status: (code: number) => ApiResponse
   json: (body: unknown) => void
+  /**
+   * Optional so every existing handler and test keeps working untouched.
+   * Anything that genuinely needs it — setting a session cookie — should
+   * fail loudly rather than silently skip, which is what requireSetHeader()
+   * below is for.
+   */
+  setHeader?: (name: string, value: string | string[]) => void
+}
+
+/** Reads one cookie out of the request's Cookie header. */
+export function readCookie(req: ApiRequest, name: string): string | null {
+  const raw = req.headers?.cookie
+  const header = Array.isArray(raw) ? raw.join('; ') : raw
+  if (!header) return null
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return decodeURIComponent(rest.join('='))
+  }
+  return null
+}
+
+/**
+ * A response that can set headers, or a clear failure.
+ *
+ * Silently not setting a session cookie would present as "login succeeds but
+ * you are immediately logged out again", which is a genuinely horrible thing
+ * to debug. Better to say so.
+ */
+export function requireSetHeader(res: ApiResponse): (name: string, value: string | string[]) => void {
+  if (!res.setHeader) {
+    throw new Error('this response cannot set headers, so a session cookie cannot be issued')
+  }
+  return res.setHeader.bind(res)
+}
+
+export function unauthorized(res: ApiResponse): void {
+  res.status(401).json({ ok: false, error: 'not signed in' })
 }
 
 /** Defensive body parsing — Vercel sometimes hands a raw string, sometimes JSON. */
