@@ -16,8 +16,8 @@
  * rather than broken, so it is modelled explicitly rather than left as an
  * absent field for the UI to interpret.
  */
-import { weeksBetween } from './dates'
-import type { SeriesPoint } from './types'
+import { weeksBetween } from './dates.js'
+import type { SeriesPoint } from './types.js'
 
 export type DrawdownPoint = {
   onDate: string

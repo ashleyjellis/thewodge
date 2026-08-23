@@ -6,7 +6,7 @@
  * it is the part that has to be right, so it is the part that must be
  * testable without a database, a server or a browser.
  */
-import type { FlowKind } from '@/server/trackerDb/schema'
+import type { FlowKind } from '../../server/trackerDb/schema.js'
 
 export type Reading = {
   /** the date the PROVIDER says the value is as of */

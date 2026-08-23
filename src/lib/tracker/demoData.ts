@@ -30,9 +30,9 @@
  * portfolio too young to say anything about, missing weeks, contributions
  * pulling time-weighted and simple return apart.
  */
-import { MICRO, unitsForAmountMicro, valueFromUnits } from './money'
-import { addDays } from './dates'
-import type { AssetClass, FlowKind, StyleFamily, Wrapper } from '@/server/trackerDb/schema'
+import { MICRO, unitsForAmountMicro, valueFromUnits } from './money.js'
+import { addDays } from './dates.js'
+import type { AssetClass, FlowKind, StyleFamily, Wrapper } from '../../server/trackerDb/schema.js'
 
 export const DEMO_SEED = 20260101
 

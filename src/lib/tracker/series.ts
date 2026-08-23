@@ -36,9 +36,9 @@
  * recovers exactly the missing weeks; with irregular ones it degrades to
  * "only fill what is clearly missing" rather than to nonsense.
  */
-import { MICRO, unitPriceMicro, unitsForAmountMicro, valueFromUnits } from './money'
-import { addDays, daysBetween, toEpochDay } from './dates'
-import type { Flow, Reading, SeriesInput, SeriesPoint } from './types'
+import { MICRO, unitPriceMicro, unitsForAmountMicro, valueFromUnits } from './money.js'
+import { addDays, daysBetween, toEpochDay } from './dates.js'
+import type { Flow, Reading, SeriesInput, SeriesPoint } from './types.js'
 
 /** An interval longer than this multiple of the usual cadence is a gap. */
 const GAP_THRESHOLD = 1.5

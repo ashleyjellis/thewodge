@@ -7,10 +7,10 @@
  * disagreeing — which is the failure a published series can least afford.
  */
 import { and, eq, inArray } from 'drizzle-orm'
-import { buildSeries } from '@/lib/tracker/series'
-import type { TrackerDb } from './client'
-import { flows, portfolios, readings, seriesCache } from './schema'
-import type { ReadingSource } from './schema'
+import { buildSeries } from '../../lib/tracker/series.js'
+import type { TrackerDb } from './client.js'
+import { flows, portfolios, readings, seriesCache } from './schema.js'
+import type { ReadingSource } from './schema.js'
 
 export type ReadingDraft = {
   portfolioId: number

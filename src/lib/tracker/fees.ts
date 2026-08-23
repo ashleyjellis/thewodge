@@ -18,9 +18,9 @@
  * £50,000 pot can sit in different fee tiers, and a comparison that quietly
  * assumes one of them is answering a question nobody asked.
  */
-import { MICRO } from './money'
-import { daysBetween } from './dates'
-import type { SeriesPoint } from './types'
+import { MICRO } from './money.js'
+import { daysBetween } from './dates.js'
+import type { SeriesPoint } from './types.js'
 
 export type FeeTier = {
   /** inclusive upper bound in pence; null means "everything above" */

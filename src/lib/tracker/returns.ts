@@ -10,8 +10,8 @@
  * only diverge once money moves in or out, and the size of the divergence is
  * entirely a fact about timing, not about the manager.
  */
-import { MICRO } from './money'
-import type { SeriesPoint } from './types'
+import { MICRO } from './money.js'
+import type { SeriesPoint } from './types.js'
 
 /**
  * Time-weighted return between two points in the series.

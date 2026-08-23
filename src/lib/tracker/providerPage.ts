@@ -7,14 +7,14 @@
  * anything, and means the fee-on and fee-off views cannot drift apart by
  * being computed in different places.
  */
-import { analyseDrawdown, type DrawdownAnalysis } from './drawdown'
-import { applyFees, parseFeeTiers, tierBpsFor, totalFeePence, type FeeTier } from './fees'
-import { buildSeries, netInvestedPence } from './series'
-import { returnsAreEquivalent, simpleReturn, timeWeightedReturn } from './returns'
-import { annualisedVolatility, type VolatilityResult } from './volatility'
-import { daysBetween } from './dates'
-import { MICRO } from './money'
-import type { Flow, Reading, SeriesPoint } from './types'
+import { analyseDrawdown, type DrawdownAnalysis } from './drawdown.js'
+import { applyFees, parseFeeTiers, tierBpsFor, totalFeePence, type FeeTier } from './fees.js'
+import { buildSeries, netInvestedPence } from './series.js'
+import { returnsAreEquivalent, simpleReturn, timeWeightedReturn } from './returns.js'
+import { annualisedVolatility, type VolatilityResult } from './volatility.js'
+import { daysBetween } from './dates.js'
+import { MICRO } from './money.js'
+import type { Flow, Reading, SeriesPoint } from './types.js'
 
 /**
  * Below this many readings the page says so plainly and suppresses the

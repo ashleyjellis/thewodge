@@ -2,8 +2,8 @@
  * Portfolio reads for the admin panel and the public pages.
  */
 import { and, desc, eq } from 'drizzle-orm'
-import type { TrackerDb } from './client'
-import { portfolios, providers, readings } from './schema'
+import type { TrackerDb } from './client.js'
+import { portfolios, providers, readings } from './schema.js'
 
 export type PortfolioRow = typeof portfolios.$inferSelect
 export type ProviderRow = typeof providers.$inferSelect

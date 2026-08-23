@@ -20,8 +20,8 @@
  * cannot say yet", which is the truth. The gate returns null precisely so
  * that the UI cannot accidentally render a confident-looking zero.
  */
-import type { SeriesPoint } from './types'
-import { logReturns } from './returns'
+import type { SeriesPoint } from './types.js'
+import { logReturns } from './returns.js'
 
 export const MIN_READINGS_FOR_VOLATILITY = 26
 export const MIN_READINGS_FOR_UNQUALIFIED = 156
