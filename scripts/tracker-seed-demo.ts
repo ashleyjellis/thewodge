@@ -28,6 +28,7 @@ import 'dotenv/config'
 import { eq, inArray } from 'drizzle-orm'
 import { addDays } from '../src/lib/tracker/dates'
 import { buildDemoDataset } from '../src/lib/tracker/demoData'
+import { buildSeries } from '../src/lib/tracker/series'
 import { getTrackerDb, closeTrackerDb } from '../src/server/trackerDb/client'
 import * as schema from '../src/server/trackerDb/schema'
 
@@ -139,6 +140,7 @@ for (const provider of dataset.providers) {
 const portfolioIdByKey = new Map<string, number>()
 let readingCount = 0
 let flowCount = 0
+let seriesPointCount = 0
 
 for (const portfolio of dataset.portfolios) {
   const providerId = providerIdBySlug.get(portfolio.providerSlug)!
@@ -194,6 +196,33 @@ for (const portfolio of dataset.portfolios) {
       })),
     )
     flowCount += portfolio.flows.length
+  }
+
+  // Build the derived series here too, from the readings and flows already in
+  // memory. The admin path rebuilds series_cache on every write, so a seeded
+  // database that skipped it would be in a state the running application
+  // never produces: readings present, cache empty. Nothing crashes on that —
+  // the CSV export falls back to recomputing — but "the table is empty" and
+  // "the table is right" are indistinguishable from the outside, and the
+  // fallback quietly hides the gap. Seed the state the app actually maintains.
+  const points = buildSeries({
+    inceptionDate: portfolio.inceptionDate,
+    initialPence: portfolio.initialPence,
+    readings: portfolio.readings,
+    flows: portfolio.flows,
+  })
+  if (points.length > 0) {
+    await db.insert(schema.seriesCache).values(
+      points.map((point) => ({
+        portfolioId,
+        onDate: point.onDate,
+        unitPriceMicro: point.unitPriceMicro,
+        unitsMicro: point.unitsMicro,
+        valuePence: point.valuePence,
+        isForwardFilled: point.isForwardFilled,
+      })),
+    )
+    seriesPointCount += points.length
   }
 }
 
@@ -253,6 +282,7 @@ await db.insert(schema.subscribers).values(
 console.log(
   `[tracker-seed] done — ${dataset.providers.length} providers, ` +
     `${dataset.portfolios.length} portfolios, ${readingCount} readings, ${flowCount} flows, ` +
+    `${seriesPointCount} series points, ` +
     `${dataset.holdings.length} holdings, ${dataset.benchmarks.length} benchmarks, ` +
     `${dataset.notes.length} notes, ${dataset.subscribers.length} subscribers`,
 )

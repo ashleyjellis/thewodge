@@ -3,6 +3,11 @@
  * trivial to change. Forecast assumptions live here too — they are stated openly
  * on /methodology (principle 4: transparency).
  */
+// Relative with an explicit .js, not the '@/' alias used elsewhere in src:
+// this module is reachable from api/forecast.ts, so it is compiled and run by
+// Node's ESM loader in production, which resolves neither tsconfig paths nor
+// extensionless specifiers. api/_lib/imports.test.ts enforces this.
+import { DEMO_MODE_DEFAULT_ON } from './lib/demoModeDefault.js'
 
 /** Working name. Change here to rename everywhere. */
 export const SITE_NAME = 'The Wodge'
@@ -146,5 +151,10 @@ export function navigableSurfaces(): Surface[] {
  *
  * Read by the persistent banner on every tracker page, by the CSV export
  * header, and by the seed command, which refuses to run when this is off.
+ *
+ * The server reads the same variable separately, from process.env — see
+ * src/server/demoMode.ts, which owns the shared default and documents the one
+ * way the two reads can still disagree.
  */
-export const DEMO_MODE = (import.meta.env?.VITE_DEMO_MODE ?? '1') !== '0'
+export const DEMO_MODE =
+  (import.meta.env?.VITE_DEMO_MODE ?? (DEMO_MODE_DEFAULT_ON ? '1' : '0')) !== '0'

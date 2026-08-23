@@ -4,8 +4,9 @@
  * are kept together and labelled by their number in it rather than scattered
  * among the unit tests.
  *
- * Tests 8 (CSV round-trip) and 9 (DEMO_MODE banner) involve the export and
- * the pages, and land with those.
+ * Test 9 (the DEMO_MODE marker) spans the pages as well as the data, so the
+ * half of it that can be asserted without a browser lives here and the rest
+ * is covered by the route tests.
  */
 import { describe, expect, it } from 'vitest'
 import { buildSeries, netInvestedPence } from './series'
@@ -15,6 +16,7 @@ import { analyseDrawdown } from './drawdown'
 import { annualisedVolatility } from './volatility'
 import { MICRO } from './money'
 import { addDays } from './dates'
+import { parseSeriesCsv, toCsv, type SeriesCsvMeta, type SeriesCsvRow } from './csv'
 import type { Flow, Reading } from './types'
 
 const INCEPTION = '2026-01-01'
@@ -312,5 +314,131 @@ describe('7. twenty readings is not enough to publish a volatility', () => {
     expect(enough.isDisplayable).toBe(true)
     expect(enough.isProvisional).toBe(true)
     expect(enough.annualised).toBeGreaterThan(0)
+  })
+})
+
+// ── 8 ─────────────────────────────────────────────────────────────────────
+
+describe('8. the CSV export round-trips to an identical series', () => {
+  // A real series with everything awkward in it: an opening point, a
+  // contribution that changes the unit count mid-way, and a forward-filled
+  // gap. A round-trip that only ever sees clean weekly rows proves less.
+  const readings: Reading[] = [
+    ...weekly(4).map((valuationDate, i) => ({ valuationDate, valuePence: 50_000 + i * 137 })),
+    // week 5 deliberately missing — forward-filled
+    ...weekly(8).slice(5).map((valuationDate, i) => ({
+      valuationDate,
+      valuePence: 100_500 + i * 211,
+    })),
+  ]
+  const flows: Flow[] = [
+    { effectiveDate: INCEPTION, amountPence: FIVE_HUNDRED, kind: 'initial' },
+    { effectiveDate: addDays(INCEPTION, 35), amountPence: 50_000, kind: 'contribution' },
+  ]
+  const points = buildSeries({
+    inceptionDate: INCEPTION,
+    initialPence: FIVE_HUNDRED,
+    readings,
+    flows,
+  })
+
+  /** Exactly what rebuildSeriesCache writes to series_cache. */
+  const cacheRows: SeriesCsvRow[] = points.map((point) => ({
+    onDate: point.onDate,
+    unitPriceMicro: point.unitPriceMicro,
+    unitsMicro: point.unitsMicro,
+    valuePence: point.valuePence,
+    isForwardFilled: point.isForwardFilled,
+  }))
+
+  const meta: SeriesCsvMeta = {
+    providerName: 'Northgate, Bell & Co',
+    providerSlug: 'northgate',
+    portfolioName: 'Fully Managed — Balanced',
+    portfolioSlug: 'fully-managed-balanced',
+    generatedAt: '2026-08-23T09:00:00Z',
+    isDemo: true,
+  }
+
+  it('parses back to rows identical to the ones exported', () => {
+    const parsed = parseSeriesCsv(toCsv(cacheRows, meta))
+    expect(parsed.rows).toEqual(cacheRows)
+  })
+
+  it('carries the integers exactly, not to a few decimal places', () => {
+    const parsed = parseSeriesCsv(toCsv(cacheRows, meta))
+    for (const [i, row] of parsed.rows.entries()) {
+      expect(row.unitPriceMicro).toBe(cacheRows[i]!.unitPriceMicro)
+      expect(row.unitsMicro).toBe(cacheRows[i]!.unitsMicro)
+      expect(row.valuePence).toBe(cacheRows[i]!.valuePence)
+    }
+  })
+
+  it('preserves which points were forward-filled', () => {
+    const filled = cacheRows.filter((row) => row.isForwardFilled)
+    expect(filled.length).toBeGreaterThan(0) // the fixture must actually have a gap
+    const parsed = parseSeriesCsv(toCsv(cacheRows, meta))
+    expect(parsed.rows.filter((row) => row.isForwardFilled).map((row) => row.onDate)).toEqual(
+      filled.map((row) => row.onDate),
+    )
+  })
+
+  it('survives a provider name containing a comma', () => {
+    const parsed = parseSeriesCsv(toCsv(cacheRows, meta))
+    expect(parsed.rows).toEqual(cacheRows)
+  })
+
+  it('refuses a malformed row rather than silently dropping it', () => {
+    const broken = toCsv(cacheRows, meta).replace('1000000', 'not-a-number')
+    expect(() => parseSeriesCsv(broken)).toThrow(/unit_price_micro/)
+  })
+})
+
+// ── 9 ─────────────────────────────────────────────────────────────────────
+
+describe('9. demo data announces itself in the export', () => {
+  const rows: SeriesCsvRow[] = [
+    { onDate: INCEPTION, unitPriceMicro: MICRO, unitsMicro: 50_000 * MICRO, valuePence: 50_000, isForwardFilled: false },
+  ]
+  const meta = {
+    providerName: 'Northgate',
+    providerSlug: 'northgate',
+    portfolioName: 'Balanced',
+    portfolioSlug: 'balanced',
+    generatedAt: '2026-08-23T09:00:00Z',
+  }
+
+  it('states it in the preamble a person reads', () => {
+    expect(toCsv(rows, { ...meta, isDemo: true })).toContain('# DEMO DATA')
+  })
+
+  it('states it again on every row, where stripping comments cannot remove it', () => {
+    const csv = toCsv(rows, { ...meta, isDemo: true })
+    const dataLines = csv.split('\n').filter((line) => line && !line.startsWith('#'))
+    const [header, ...body] = dataLines
+    expect(header).toContain('demo_data')
+    expect(body.every((line) => line.endsWith('TRUE'))).toBe(true)
+  })
+
+  it('is still detected when the preamble has been stripped', () => {
+    const csv = toCsv(rows, { ...meta, isDemo: true })
+    const withoutComments = csv.split('\n').filter((line) => !line.startsWith('#')).join('\n')
+    expect(parseSeriesCsv(withoutComments).isDemo).toBe(true)
+  })
+
+  it('is still detected when the column has been deleted', () => {
+    const csv = toCsv(rows, { ...meta, isDemo: true })
+    const withoutColumn = csv
+      .split('\n')
+      .map((line) => (line.startsWith('#') ? line : line.replace(/,(TRUE|demo_data)$/, '')))
+      .join('\n')
+    expect(parseSeriesCsv(withoutColumn).isDemo).toBe(true)
+  })
+
+  it('says nothing of the sort once the data is real', () => {
+    const csv = toCsv(rows, { ...meta, isDemo: false })
+    expect(csv).not.toContain('DEMO')
+    expect(csv).not.toContain('demo_data')
+    expect(parseSeriesCsv(csv).isDemo).toBe(false)
   })
 })

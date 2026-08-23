@@ -112,6 +112,39 @@ function ProviderPage() {
   const [error, setError] = useState<string | null>(null)
   const [feesDeducted, setFeesDeducted] = useState(false)
   const [balanceInput, setBalanceInput] = useState('£500')
+  const [alertEmail, setAlertEmail] = useState('')
+  const [alertState, setAlertState] = useState<'idle' | 'sending' | 'done' | 'failed'>('idle')
+  const [alertMessage, setAlertMessage] = useState<string | null>(null)
+
+  async function submitAlert(event: React.FormEvent) {
+    event.preventDefault()
+    if (DEMO_MODE) return
+
+    setAlertState('sending')
+    setAlertMessage(null)
+    try {
+      const response = await fetch('/api/tracker/alert', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: alertEmail, provider, portfolio }),
+      })
+      const payload = await response.json()
+      if (payload?.ok) {
+        setAlertState('done')
+        setAlertMessage(payload.message)
+        setAlertEmail('')
+      } else {
+        // The server's own wording, which explains the specific refusal —
+        // a generic "something went wrong" would hide a fixable mistake
+        // like a mistyped address.
+        setAlertState('failed')
+        setAlertMessage(payload?.error ?? 'That did not save. Try again in a moment.')
+      }
+    } catch {
+      setAlertState('failed')
+      setAlertMessage('Could not reach the server. Try again in a moment.')
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -342,10 +375,22 @@ function ProviderPage() {
         ) : null}
 
         <section className="mt-14 border-t border-border pt-12">
-          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">The ledger</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-4">
+            <h2 className="text-[22px] font-semibold tracking-tight text-foreground">The ledger</h2>
+            {/* A real link rather than a scripted download, so it works with
+                JavaScript off and can be right-clicked, copied and cited. The
+                filename comes from the endpoint's content-disposition. */}
+            <a
+              href={`/api/tracker/series?provider=${provider}&portfolio=${portfolio}`}
+              className="text-[13px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+            >
+              Download the whole series (CSV)
+            </a>
+          </div>
           <p className="mt-2 max-w-[62ch] text-[14px] text-muted-foreground">
             Every reading, in the order it was taken. The unit price is value divided by units held,
-            so paying money in adds units without moving the price.
+            so paying money in adds units without moving the price. The CSV carries the same
+            integers this page is drawn from, so any figure here can be checked against it.
           </p>
           <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
             <table className="w-full min-w-[600px] text-[13px]">
@@ -402,26 +447,47 @@ function ProviderPage() {
               Get a short note whenever this portfolio moves more than 2% in a week, changes what it
               holds, or adjusts its charges. Nothing else.
             </p>
-            <form
-              className="mt-6 flex flex-wrap gap-3"
-              onSubmit={(event) => event.preventDefault()}
-            >
+            <form className="mt-6 flex flex-wrap gap-3" onSubmit={submitAlert}>
               <input
                 type="email"
+                value={alertEmail}
+                onChange={(event) => setAlertEmail(event.target.value)}
+                disabled={DEMO_MODE || alertState === 'sending'}
                 placeholder="you@example.com"
                 aria-label="Email address"
-                className="min-w-[220px] flex-1 rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 px-4 py-2.5 text-[15px] text-primary-foreground placeholder:text-primary-foreground/50"
+                className="min-w-[220px] flex-1 rounded-xl border border-primary-foreground/30 bg-primary-foreground/10 px-4 py-2.5 text-[15px] text-primary-foreground placeholder:text-primary-foreground/50 disabled:opacity-50"
               />
               <button
                 type="submit"
-                className="rounded-xl bg-primary-foreground px-5 py-2.5 text-[15px] font-medium text-foreground"
+                disabled={DEMO_MODE || alertState === 'sending'}
+                className="rounded-xl bg-primary-foreground px-5 py-2.5 text-[15px] font-medium text-foreground disabled:opacity-50"
               >
-                Track this portfolio
+                {alertState === 'sending' ? 'Saving…' : 'Track this portfolio'}
               </button>
             </form>
+
+            {alertMessage ? (
+              <p
+                className={cn(
+                  'mt-4 text-[13px]',
+                  // A refusal has to look different from a confirmation. Same
+                  // size and colour for both would let someone read "that
+                  // does not look like an email address" as success and walk
+                  // away thinking they had subscribed.
+                  alertState === 'failed' ? 'font-medium' : 'opacity-80',
+                )}
+                role="status"
+              >
+                {alertState === 'failed' ? '⚠ ' : ''}
+                {alertMessage}
+              </p>
+            ) : null}
+
             <p className="mt-4 text-[12px] opacity-60">
               Roughly two emails a month. One click to stop.
-              {DEMO_MODE ? ' Not wired up while this is demo data.' : ''}
+              {DEMO_MODE
+                ? ' Switched off while these portfolios are fabricated — there is nothing real to report on, so no address is stored.'
+                : ''}
             </p>
           </div>
         </section>

@@ -22,6 +22,11 @@ export type ApiResponse = {
    * below is for.
    */
   setHeader?: (name: string, value: string | string[]) => void
+  /**
+   * Sends a body that is not JSON. Only the CSV export needs this; optional
+   * for the same reason as setHeader, and guarded by requireSend() below.
+   */
+  send?: (body: string) => void
 }
 
 /** Reads one cookie out of the request's Cookie header. */
@@ -48,6 +53,20 @@ export function requireSetHeader(res: ApiResponse): (name: string, value: string
     throw new Error('this response cannot set headers, so a session cookie cannot be issued')
   }
   return res.setHeader.bind(res)
+}
+
+/**
+ * A response that can send a non-JSON body, or a clear failure.
+ *
+ * Falling back to res.json() for a CSV would produce a JSON-quoted string
+ * with every newline escaped — a file that downloads, opens, and is wrong in
+ * a way that looks like a bug in the export rather than in the plumbing.
+ */
+export function requireSend(res: ApiResponse): (body: string) => void {
+  if (!res.send) {
+    throw new Error('this response cannot send a non-JSON body, so a CSV cannot be returned')
+  }
+  return res.send.bind(res)
 }
 
 export function unauthorized(res: ApiResponse): void {

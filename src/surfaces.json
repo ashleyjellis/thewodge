@@ -36,6 +36,10 @@
           "label": "Portfolios"
         },
         {
+          "to": "/performance/notes",
+          "label": "Notes"
+        },
+        {
           "to": "/performance/method",
           "label": "How this is measured"
         }

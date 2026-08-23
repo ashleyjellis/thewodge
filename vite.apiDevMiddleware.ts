@@ -75,6 +75,13 @@ export function apiDevMiddleware(): Plugin {
                 res.setHeader('content-type', 'application/json')
                 res.end(JSON.stringify(payload))
               },
+              // Deliberately does not set a content-type: a handler sending a
+              // non-JSON body has already said what it is (the CSV export
+              // sets text/csv plus a filename), and defaulting one here would
+              // silently override it.
+              send(body: string) {
+                res.end(body)
+              },
               setHeader(name: string, value: string | string[]) {
                 res.setHeader(name, value)
               },
