@@ -34,6 +34,18 @@ function buildClient(): Client {
       encryptionKey: process.env.TRACKER_TURSO_ENCRYPTION_KEY,
     })
   }
+  // The local-file fallback is what makes development work with no setup.
+  // In production it is always a misconfiguration: a serverless filesystem is
+  // read-only and ephemeral, so this would either throw something obscure or
+  // silently serve an empty database — which presents as "nothing tracked
+  // yet" and sends someone looking for a bug in the wrong place entirely.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'TRACKER_TURSO_DATABASE_URL is not set. The tracker database must be configured in production; ' +
+        'the local-file fallback only exists for development.',
+    )
+  }
+
   const path = process.env.TRACKER_LOCAL_DB_PATH ?? '.data/wodge-tracker.db'
   // The local file lives under .data/, which is gitignored — so on a fresh
   // clone the directory does not exist yet and libSQL fails to open with a

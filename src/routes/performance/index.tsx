@@ -35,12 +35,26 @@ type Row = {
 
 function PerformanceIndex() {
   const [rows, setRows] = useState<Row[] | null>(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
+    // An empty list and a failed request are different facts and must not
+    // render the same. "Nothing tracked yet" in front of a database that is
+    // simply unreachable sends someone hunting for missing data rather than a
+    // missing connection.
     fetch('/api/tracker/portfolio')
       .then((r) => r.json())
-      .then((payload) => setRows(payload?.ok ? payload.portfolios : []))
-      .catch(() => setRows([]))
+      .then((payload) => {
+        if (payload?.ok) setRows(payload.portfolios)
+        else {
+          setFailed(true)
+          setRows([])
+        }
+      })
+      .catch(() => {
+        setFailed(true)
+        setRows([])
+      })
   }, [])
 
   const byProvider = (rows ?? []).reduce<Record<string, Row[]>>((acc, row) => {
@@ -66,8 +80,28 @@ function PerformanceIndex() {
 
         {rows === null ? (
           <p className="mt-10 text-[14px] text-muted-foreground">Loading…</p>
+        ) : failed ? (
+          <div className="mt-10 rounded-2xl border border-border bg-card p-6">
+            <p className="text-[15px] font-medium text-foreground">
+              Could not reach the tracker database.
+            </p>
+            <p className="mt-2 max-w-[60ch] text-[14px] text-muted-foreground">
+              This is a configuration problem rather than an empty record. Locally, run{' '}
+              <code className="rounded bg-muted px-1.5 py-0.5">pnpm tracker:db:migrate</code> then{' '}
+              <code className="rounded bg-muted px-1.5 py-0.5">pnpm tracker:seed:demo</code>. In a
+              deployed environment, check that TRACKER_TURSO_DATABASE_URL and
+              TRACKER_TURSO_AUTH_TOKEN are set.
+            </p>
+          </div>
         ) : rows.length === 0 ? (
-          <p className="mt-10 text-[14px] text-muted-foreground">No portfolios tracked yet.</p>
+          <div className="mt-10 rounded-2xl border border-border bg-card p-6">
+            <p className="text-[15px] font-medium text-foreground">No portfolios tracked yet.</p>
+            <p className="mt-2 max-w-[60ch] text-[14px] text-muted-foreground">
+              The database is reachable but holds nothing. Run{' '}
+              <code className="rounded bg-muted px-1.5 py-0.5">pnpm tracker:seed:demo</code> to load
+              the demo dataset.
+            </p>
+          </div>
         ) : (
           <div className="mt-10 space-y-8">
             {Object.entries(byProvider).map(([providerName, portfolios]) => (
