@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import handler from './alert'
-import { fakeReq, fakeRes } from '../_lib/testHttp'
+import { fakeReq, fakeRes } from '../testHttp'
 
 const original = process.env.VITE_DEMO_MODE
 

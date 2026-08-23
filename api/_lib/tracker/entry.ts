@@ -7,14 +7,14 @@
  *
  * Both require a signed-in operator.
  */
-import { getTrackerDb } from '../../src/server/trackerDb/client.js'
+import { getTrackerDb } from '../../../src/server/trackerDb/client.js'
 import {
   latestReadingByPortfolio,
   listActivePortfolios,
-} from '../../src/server/trackerDb/portfolios.js'
-import { saveReadings, type ReadingDraft } from '../../src/server/trackerDb/readings.js'
-import type { ReadingSource } from '../../src/server/trackerDb/schema.js'
-import { ADMIN_COOKIE_NAME, readSessionToken } from '../../src/server/adminAuth.js'
+} from '../../../src/server/trackerDb/portfolios.js'
+import { saveReadings, type ReadingDraft } from '../../../src/server/trackerDb/readings.js'
+import type { ReadingSource } from '../../../src/server/trackerDb/schema.js'
+import { ADMIN_COOKIE_NAME, readSessionToken } from '../../../src/server/adminAuth.js'
 import {
   badRequest,
   methodNotAllowed,
@@ -24,7 +24,7 @@ import {
   unauthorized,
   type ApiRequest,
   type ApiResponse,
-} from '../_lib/http.js'
+} from '../http.js'
 
 const SOURCES: readonly ReadingSource[] = ['web', 'app', 'statement']
 

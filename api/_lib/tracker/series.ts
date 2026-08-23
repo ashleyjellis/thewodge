@@ -14,20 +14,20 @@
  * empty file that looks like "no data" rather than "not cached yet".
  */
 import { eq } from 'drizzle-orm'
-import { getTrackerDb } from '../../src/server/trackerDb/client.js'
-import { findPortfolio } from '../../src/server/trackerDb/portfolios.js'
-import { listReadings } from '../../src/server/trackerDb/readings.js'
-import { flows as flowsTable, seriesCache } from '../../src/server/trackerDb/schema.js'
-import { buildSeries } from '../../src/lib/tracker/series.js'
-import { toCsv, type SeriesCsvRow } from '../../src/lib/tracker/csv.js'
-import { isDemoMode } from '../../src/server/demoMode.js'
-import { classifyDbFailure } from '../../src/server/trackerDb/errors.js'
+import { getTrackerDb } from '../../../src/server/trackerDb/client.js'
+import { findPortfolio } from '../../../src/server/trackerDb/portfolios.js'
+import { listReadings } from '../../../src/server/trackerDb/readings.js'
+import { flows as flowsTable, seriesCache } from '../../../src/server/trackerDb/schema.js'
+import { buildSeries } from '../../../src/lib/tracker/series.js'
+import { toCsv, type SeriesCsvRow } from '../../../src/lib/tracker/csv.js'
+import { isDemoMode } from '../../../src/server/demoMode.js'
+import { classifyDbFailure } from '../../../src/server/trackerDb/errors.js'
 import {
   methodNotAllowed,
   requireSend,
   type ApiRequest,
   type ApiResponse,
-} from '../_lib/http.js'
+} from '../http.js'
 
 function single(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null

@@ -8,11 +8,11 @@
  * become HTML — see that module for why that is the design rather than an
  * implementation detail.
  */
-import { getTrackerDb } from '../../src/server/trackerDb/client.js'
-import { findNote, listNotes } from '../../src/server/trackerDb/notes.js'
-import { noteExcerpt } from '../../src/lib/tracker/markdown.js'
-import { classifyDbFailure } from '../../src/server/trackerDb/errors.js'
-import { methodNotAllowed, type ApiRequest, type ApiResponse } from '../_lib/http.js'
+import { getTrackerDb } from '../../../src/server/trackerDb/client.js'
+import { findNote, listNotes } from '../../../src/server/trackerDb/notes.js'
+import { noteExcerpt } from '../../../src/lib/tracker/markdown.js'
+import { classifyDbFailure } from '../../../src/server/trackerDb/errors.js'
+import { methodNotAllowed, type ApiRequest, type ApiResponse } from '../http.js'
 
 function single(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null

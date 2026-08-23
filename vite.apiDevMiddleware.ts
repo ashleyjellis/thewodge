@@ -8,16 +8,55 @@
  * default export with an adapted req/res. Never runs in production — Vercel's own
  * routing takes over there (see `apply: 'serve'` below).
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Plugin, ViteDevServer } from 'vite'
 
-function findHandlerFile(root: string, name: string): string | null {
+type ResolvedHandler = {
+  modulePath: string
+  /** params captured from a dynamic segment, merged into req.query */
+  params: Record<string, string>
+}
+
+function findLiteralFile(root: string, name: string): string | null {
   for (const ext of ['.ts', '.mjs', '.js']) {
     const candidate = resolve(root, 'api', `${name}${ext}`)
     if (existsSync(candidate)) return candidate
   }
   return null
+}
+
+/**
+ * A `[param].ts` in the same directory, as Vercel's dynamic segments work.
+ *
+ * The tracker's endpoints share one function this way — see
+ * api/tracker/[resource].ts for why — and without this, every one of them
+ * 404s in local dev while working in production. A dev server that routes
+ * differently from the real thing is worse than no dev server, because the
+ * difference only surfaces after deploying.
+ */
+function findDynamicFile(root: string, name: string): ResolvedHandler | null {
+  const segments = name.split('/')
+  const last = segments.pop()
+  if (!last || segments.length === 0) return null
+
+  const dir = resolve(root, 'api', ...segments)
+  if (!existsSync(dir)) return null
+
+  for (const entry of readdirSync(dir)) {
+    const match = /^\[([a-zA-Z0-9_]+)\]\.(ts|mjs|js)$/.exec(entry)
+    if (match) {
+      return { modulePath: resolve(dir, entry), params: { [match[1]!]: last } }
+    }
+  }
+  return null
+}
+
+function findHandler(root: string, name: string): ResolvedHandler | null {
+  const literal = findLiteralFile(root, name)
+  // A literal file wins over a dynamic one, which is what Vercel does too.
+  if (literal) return { modulePath: literal, params: {} }
+  return findDynamicFile(root, name)
 }
 
 /**
@@ -51,10 +90,10 @@ export function apiDevMiddleware(): Plugin {
           const name = url.pathname.replace(/^\//, '')
           if (!isSafeHandlerName(name)) return next()
 
-          const modulePath = findHandlerFile(process.cwd(), name)
-          if (!modulePath) return next()
+          const resolved = findHandler(process.cwd(), name)
+          if (!resolved) return next()
 
-          const mod = await server.ssrLoadModule(modulePath)
+          const mod = await server.ssrLoadModule(resolved.modulePath)
           const handler = mod.default
           if (typeof handler !== 'function') return next()
 
@@ -63,6 +102,10 @@ export function apiDevMiddleware(): Plugin {
           url.searchParams.forEach((value, key) => {
             query[key] = value
           })
+          // Path params last: a query string cannot override the segment that
+          // chose the handler, which would otherwise let /api/tracker/notes
+          // ?resource=entry run a different endpoint than the URL names.
+          Object.assign(query, resolved.params)
 
           await handler(
             { method: req.method, body, query, headers: req.headers },

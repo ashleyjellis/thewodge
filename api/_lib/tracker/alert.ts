@@ -14,18 +14,18 @@
  * The storage path underneath is real and fully exercised by tests with demo
  * mode off, so switching it off is all that stands between this and working.
  */
-import { getTrackerDb } from '../../src/server/trackerDb/client.js'
-import { findPortfolio } from '../../src/server/trackerDb/portfolios.js'
-import { looksLikeEmail, subscribeToPortfolio } from '../../src/server/trackerDb/alerts.js'
-import { isDemoMode } from '../../src/server/demoMode.js'
-import { classifyDbFailure } from '../../src/server/trackerDb/errors.js'
+import { getTrackerDb } from '../../../src/server/trackerDb/client.js'
+import { findPortfolio } from '../../../src/server/trackerDb/portfolios.js'
+import { looksLikeEmail, subscribeToPortfolio } from '../../../src/server/trackerDb/alerts.js'
+import { isDemoMode } from '../../../src/server/demoMode.js'
+import { classifyDbFailure } from '../../../src/server/trackerDb/errors.js'
 import {
   badRequest,
   methodNotAllowed,
   parseBody,
   type ApiRequest,
   type ApiResponse,
-} from '../_lib/http.js'
+} from '../http.js'
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   try {

@@ -4,8 +4,8 @@
  * GET    /api/tracker/session  → { signedIn, email? }
  */
 import { eq } from 'drizzle-orm'
-import { getTrackerDb } from '../../src/server/trackerDb/client.js'
-import { adminUsers } from '../../src/server/trackerDb/schema.js'
+import { getTrackerDb } from '../../../src/server/trackerDb/client.js'
+import { adminUsers } from '../../../src/server/trackerDb/schema.js'
 import {
   ADMIN_COOKIE_NAME,
   clearedSessionCookie,
@@ -13,7 +13,7 @@ import {
   readSessionToken,
   sessionCookie,
   verifyPassword,
-} from '../../src/server/adminAuth.js'
+} from '../../../src/server/adminAuth.js'
 import {
   methodNotAllowed,
   parseBody,
@@ -22,7 +22,7 @@ import {
   serverError,
   type ApiRequest,
   type ApiResponse,
-} from '../_lib/http.js'
+} from '../http.js'
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   try {

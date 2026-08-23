@@ -14,24 +14,24 @@
  * row, and sending a year of readings for every portfolio to compute it in
  * the browser would be a much larger payload for the same answer.
  */
-import { getTrackerDb } from '../../src/server/trackerDb/client.js'
+import { getTrackerDb } from '../../../src/server/trackerDb/client.js'
 import {
   directoryInputs,
   findPortfolio,
   listActivePortfolios,
-} from '../../src/server/trackerDb/portfolios.js'
-import { summarisePortfolio } from '../../src/lib/tracker/directory.js'
-import { listReadings } from '../../src/server/trackerDb/readings.js'
-import { flows as flowsTable } from '../../src/server/trackerDb/schema.js'
+} from '../../../src/server/trackerDb/portfolios.js'
+import { summarisePortfolio } from '../../../src/lib/tracker/directory.js'
+import { listReadings } from '../../../src/server/trackerDb/readings.js'
+import { flows as flowsTable } from '../../../src/server/trackerDb/schema.js'
 import { eq } from 'drizzle-orm'
-import { buildSeries } from '../../src/lib/tracker/series.js'
-import { timeWeightedReturn } from '../../src/lib/tracker/returns.js'
-import { classifyDbFailure } from '../../src/server/trackerDb/errors.js'
+import { buildSeries } from '../../../src/lib/tracker/series.js'
+import { timeWeightedReturn } from '../../../src/lib/tracker/returns.js'
+import { classifyDbFailure } from '../../../src/server/trackerDb/errors.js'
 import {
   methodNotAllowed,
   type ApiRequest,
   type ApiResponse,
-} from '../_lib/http.js'
+} from '../http.js'
 
 function single(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null

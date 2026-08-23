@@ -125,3 +125,59 @@ describe('serverless import specifiers', () => {
     expect(offenders).toEqual([])
   })
 })
+
+/**
+ * The platform turns every file under api/ into its own serverless function,
+ * and the plan this deploys on allows twelve. Going over fails the build
+ * before anything is compiled, with an error about a count rather than about
+ * the endpoint that tipped it over — so the person who added a perfectly good
+ * handler gets a failure that says nothing about what they did.
+ *
+ * That happened. Six tracker endpoints plus the household app's seven made
+ * thirteen; api/tracker/[resource].ts now serves all six as one, and the
+ * handlers live in api/_lib/tracker/ where an underscore keeps them from
+ * deploying.
+ */
+const FUNCTION_LIMIT = 12
+
+/** Files the platform would deploy as functions, applying the same rules. */
+function deployableFunctions(dir = join(ROOT, 'api'), prefix = ''): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) {
+      // Underscore-prefixed directories are shared code, not endpoints.
+      if (!entry.startsWith('_')) out.push(...deployableFunctions(full, `${prefix}${entry}/`))
+      continue
+    }
+    // .vercelignore keeps tests out of the upload, so they never become
+    // functions — mirrored here rather than parsed, and asserted below.
+    if (!/\.(ts|mjs|js)$/.test(entry) || entry.endsWith('.test.ts')) continue
+    out.push(`${prefix}${entry}`)
+  }
+  return out
+}
+
+describe('serverless function count', () => {
+  it(`stays within the ${FUNCTION_LIMIT} the plan allows`, () => {
+    const functions = deployableFunctions()
+    expect(
+      functions.length,
+      `${functions.length} functions would deploy:\n  ${functions.join('\n  ')}\n` +
+        'Add new tracker endpoints to api/_lib/tracker/ and register them in ' +
+        'api/tracker/[resource].ts rather than as new files under api/.',
+    ).toBeLessThanOrEqual(FUNCTION_LIMIT)
+  })
+
+  it('counts something, so the limit is not passing on an empty list', () => {
+    expect(deployableFunctions().length).toBeGreaterThan(5)
+  })
+
+  it('relies on .vercelignore actually excluding the test files it assumes', () => {
+    // The count above only holds if tests really are kept out of the upload.
+    // If this rule is ever dropped from .vercelignore, the count is wrong and
+    // the build fails on something this test claimed to be watching.
+    const ignore = readFileSync(join(ROOT, '.vercelignore'), 'utf8')
+    expect(ignore).toContain('api/**/*.test.ts')
+  })
+})
