@@ -16,7 +16,10 @@
     "db:studio": "drizzle-kit studio",
     "archive:db:generate": "drizzle-kit generate --config drizzle.archive.config.ts",
     "archive:db:migrate": "tsx scripts/archive-db-migrate.ts",
-    "archive:db:studio": "drizzle-kit studio --config drizzle.archive.config.ts"
+    "archive:db:studio": "drizzle-kit studio --config drizzle.archive.config.ts",
+    "tracker:db:generate": "drizzle-kit generate --config drizzle.tracker.config.ts",
+    "tracker:db:migrate": "tsx scripts/tracker-db-migrate.ts",
+    "tracker:db:studio": "drizzle-kit studio --config drizzle.tracker.config.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

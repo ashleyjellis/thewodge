@@ -131,3 +131,20 @@ export function isSurfaceVisible(id: SurfaceId): boolean {
 export function navigableSurfaces(): Surface[] {
   return SURFACES.filter((s) => s.visible && s.nav.length > 0)
 }
+
+// ── Performance tracker ──────────────────────────────────────────────────────
+
+/**
+ * Demo mode: the tracker is showing fabricated performance for fictional
+ * providers rather than a real record.
+ *
+ * Defaults to ON, and has to be explicitly switched off with
+ * VITE_DEMO_MODE=0. That asymmetry is deliberate. A demo banner shown over
+ * real data is a small embarrassment someone notices and fixes; fabricated
+ * figures published without one — especially if a screenshot travels — are a
+ * serious problem. The safe direction is the default.
+ *
+ * Read by the persistent banner on every tracker page, by the CSV export
+ * header, and by the seed command, which refuses to run when this is off.
+ */
+export const DEMO_MODE = (import.meta.env?.VITE_DEMO_MODE ?? '1') !== '0'

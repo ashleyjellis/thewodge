@@ -15,6 +15,8 @@
  * languages.
  */
 import 'dotenv/config'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { createClient, type Client } from '@libsql/client'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from './schema.js'
@@ -35,6 +37,10 @@ function buildClient(): Client {
     })
   }
   const path = process.env.ARCHIVE_LOCAL_DB_PATH ?? '.data/wodge-archive.db'
+  // The local file lives under .data/, which is gitignored — so on a fresh
+  // clone the directory does not exist yet and libSQL fails to open with a
+  // bare SQLITE_CANTOPEN that says nothing about the cause. Create it.
+  mkdirSync(dirname(path), { recursive: true })
   return createClient({ url: `file:${path}` })
 }
 
