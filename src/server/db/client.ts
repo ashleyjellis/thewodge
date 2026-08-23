@@ -11,16 +11,17 @@
 import 'dotenv/config'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { createClient, type Client } from '@libsql/client'
+import { createClient } from '@libsql/client'
+import type { LibsqlClient } from '../libsqlClientType.js'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from './schema.js'
 
 export type Db = LibSQLDatabase<typeof schema>
 
-let client: Client | null = null
+let client: LibsqlClient | null = null
 let db: Db | null = null
 
-function buildClient(): Client {
+function buildClient(): LibsqlClient {
   // explicit escape hatch: force local file mode even when Turso credentials are
   // present in .env — handy when working somewhere that can't reach Turso's
   // network, without having to move .env aside.

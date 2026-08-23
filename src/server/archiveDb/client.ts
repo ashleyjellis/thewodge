@@ -17,16 +17,17 @@
 import 'dotenv/config'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { createClient, type Client } from '@libsql/client'
+import { createClient } from '@libsql/client'
+import type { LibsqlClient } from '../libsqlClientType.js'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 import * as schema from './schema.js'
 
 export type ArchiveDb = LibSQLDatabase<typeof schema>
 
-let client: Client | null = null
+let client: LibsqlClient | null = null
 let db: ArchiveDb | null = null
 
-function buildClient(): Client {
+function buildClient(): LibsqlClient {
   const forceLocal = process.env.ARCHIVE_FORCE_LOCAL_DB === '1'
   const url = forceLocal ? undefined : process.env.ARCHIVE_TURSO_DATABASE_URL
   if (url) {
